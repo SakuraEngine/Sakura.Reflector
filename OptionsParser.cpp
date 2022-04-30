@@ -57,8 +57,8 @@ const char *const OptionsParser::HelpMessage =
     "\tautomatically removed, but the rest of a relative path must be a\n"
     "\tsuffix of a path in the compile command database.\n"
     "\n";
-void replaceAll(std::string &str, const std::string &from,
-                const std::string &to) {
+static void replaceAll(std::string &str, const std::string &from,
+                       const std::string &to) {
   if (from.empty())
     return;
   size_t start_pos = 0;
@@ -117,7 +117,6 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
   if (!SourcePaths.empty()) {
     SmallString<1024> AbsolutePath(getAbsolutePath(SourcePaths[0]));
     StringRef Directory = llvm::sys::path::parent_path(AbsolutePath);
-    SourcePath = Directory.str();
   }
   if (!Compilations) {
     if (!BuildPath.empty()) {
@@ -125,7 +124,6 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
           CompilationDatabase::autoDetectFromDirectory(BuildPath, ErrorMessage);
       if (SourcePaths.empty())
         SourcePathList = Compilations->getAllFiles();
-      SourcePath = BuildPath;
     } else if (!SourcePaths.empty()) {
       Compilations = CompilationDatabase::autoDetectFromSource(SourcePaths[0],
                                                                ErrorMessage);

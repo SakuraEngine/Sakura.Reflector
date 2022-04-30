@@ -10,6 +10,7 @@
 #include "OptionsParser.h"
 #include "meta.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Path.h"
 #include <fstream>
 #include <memory>
 
@@ -29,11 +30,16 @@ static llvm::cl::extrahelp
 static llvm::cl::extrahelp MoreHelp("\nMore help text...\n");
 
 static llvm::cl::opt<std::string> Output(
-    "output",
-    llvm::cl::desc("Specify database output file, depending on extension"),
-    ToolCategory, llvm::cl::value_desc("filename"));
+    "output", llvm::cl::Required,
+    llvm::cl::desc("Specify database output directory, depending on extension"),
+    ToolCategory, llvm::cl::value_desc("directory"));
 
-static meta::Database db;
+static llvm::cl::opt<std::string>
+    Root("root", llvm::cl::Required,
+         llvm::cl::desc("Specify parse root directory"), ToolCategory,
+         llvm::cl::value_desc("directory"));
+
+static meta::FileDataMap datamap;
 class ReflectFrontendAction : public clang::ASTFrontendAction {
 public:
   ReflectFrontendAction() {}
@@ -42,7 +48,7 @@ public:
   CreateASTConsumer(clang::CompilerInstance &compiler, llvm::StringRef file) {
     auto &LO = compiler.getLangOpts();
     LO.CommentOpts.ParseAllComments = true;
-    return std::make_unique<meta::ASTConsumer>(db);
+    return std::make_unique<meta::ASTConsumer>(datamap, Root);
   }
 };
 
@@ -66,11 +72,18 @@ int main(int argc, const char **argv) {
   int result = Tool.run(
       tooling::newFrontendActionFactory<ReflectFrontendAction>().get());
   std::string OutPath;
-  if (Output.empty())
-    OutPath = OptionsParser.getSourceDirectory() + "/meta.json";
-  else
-    OutPath = Output;
-  std::ofstream of(OutPath);
-  of << meta::serialize(db);
+  OutPath = Output;
+  for (auto &pair : datamap) {
+    using namespace llvm;
+    if (pair.second.is_empty())
+      continue;
+    SmallString<1024> MetaPath(OutPath + pair.first);
+    sys::path::replace_extension(MetaPath, ".h.meta");
+    SmallString<1024> MetaDir = MetaPath;
+    sys::path::remove_filename(MetaDir);
+    llvm::sys::fs::create_directories(MetaDir);
+    std::ofstream of(MetaPath.str().str());
+    of << meta::serialize(pair.second);
+  }
   return result;
 }

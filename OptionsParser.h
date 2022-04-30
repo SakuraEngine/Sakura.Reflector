@@ -65,8 +65,6 @@ public:
     return SourcePathList;
   }
 
-  const std::string &getSourceDirectory() const { return SourcePath; }
-
   /// Returns the argument adjuster calculated from "--extra-arg" and
   //"--extra-arg-before" options.
   ArgumentsAdjuster getArgumentsAdjuster() { return Adjuster; }
@@ -82,7 +80,6 @@ private:
 
   std::unique_ptr<CompilationDatabase> Compilations;
   std::vector<std::string> SourcePathList;
-  std::string SourcePath;
   ArgumentsAdjuster Adjuster;
 };
 
