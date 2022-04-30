@@ -2,6 +2,7 @@
 
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/Decl.h"
+#include "clang/AST/RecordLayout.h"
 #include "meta.h"
 
 #define LOG(...)
@@ -27,6 +28,6 @@ namespace meta
     protected:
         Database& db;
         ASTContext* _ASTContext;
-        void HandleDecl(clang::NamedDecl* decl, std::vector<std::string>& attrStack, ParseBehavior behavior, Record* record);
+        void HandleDecl(clang::NamedDecl* decl, std::vector<std::string>& attrStack, ParseBehavior behavior, Record* record, const clang::ASTRecordLayout* layout);
     };
 }

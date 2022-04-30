@@ -18,6 +18,7 @@ namespace meta
         std::string rawType;
         std::string attrs;
         std::string comment;
+        size_t offset;
         int line;
     };
 

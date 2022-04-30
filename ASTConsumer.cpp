@@ -7,6 +7,7 @@
 #include "clang/AST/DeclBase.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"
+#include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
 #include "clang/Basic/SourceManager.h"
 #include "llvm/ADT/StringRef.h"
@@ -33,7 +34,7 @@ void meta::ASTConsumer::HandleTranslationUnit(ASTContext &ctx)
         case (clang::Decl::Function):
         case (clang::Decl::Enum):
         case (clang::Decl::ClassTemplate):
-            HandleDecl(named_decl, newStack, PAR_NoReflect, nullptr);
+            HandleDecl(named_decl, newStack, PAR_NoReflect, nullptr, nullptr);
             break;
         default:
             break;
@@ -117,7 +118,7 @@ std::string GetComment(clang::Decl* decl, clang::ASTContext* ctx, clang::SourceM
     return comment;
 }
 
-void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::string>& attrStack, ParseBehavior behavior, Record* record)
+void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::string>& attrStack, ParseBehavior behavior, Record* record, const clang::ASTRecordLayout* layout)
 {
     if(decl->isInvalidDecl())
         return;
@@ -194,7 +195,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::stri
             {
                 clang::NamedDecl* named_decl = llvm::dyn_cast<clang::NamedDecl>(*i);
                 if (named_decl)
-                    HandleDecl(named_decl, newStack, behavior, nullptr);
+                    HandleDecl(named_decl, newStack, behavior, nullptr, nullptr);
             }
             return;
         }
@@ -235,7 +236,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::stri
                 clang::NamedDecl* namedDecl = llvm::dyn_cast<clang::NamedDecl>(*i);
                 if(!namedDecl)
                     continue;
-                HandleDecl(namedDecl, newStack, childBehavior, &newRecord);
+                HandleDecl(namedDecl, newStack, childBehavior, &newRecord, &_ASTContext->getASTRecordLayout(recordDecl));
             }
 
             if(!recordDecl->isAnonymousStructOrUnion())
@@ -308,6 +309,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::stri
                 newField.type = GetTypeName(param->getType(), _ASTContext);
                 newField.rawType = GetRawTypeName(param->getType(), _ASTContext);
                 newField.line = location.getLine();
+                newField.offset = 0;
                 newFunction.parameters.push_back(std::move(newField));
             }
             if(record)
@@ -328,7 +330,10 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::stri
             newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
             newField.line = location.getLine();
             if(record)
+            {
+                newField.offset = layout->getFieldOffset(fieldDecl->getFieldIndex()) / 8;
                 record->fields.push_back(std::move(newField));
+            }
             else
                 LOG("field without record founded.");
         }
@@ -344,6 +349,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl* decl, std::vector<std::stri
             newField.name = varDecl->getNameAsString();
             newField.type = GetTypeName(varDecl->getType(), _ASTContext);
             newField.line = location.getLine();
+            newField.offset = 0;
             if(record)
                 record->statics.push_back(std::move(newField));
             else

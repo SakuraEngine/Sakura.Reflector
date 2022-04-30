@@ -30,8 +30,8 @@
 #include "llvm/Support/Error.h"
 
 namespace meta {
-    using namespace clang;
-    using namespace clang::tooling;
+using namespace clang;
+using namespace clang::tooling;
 
 class OptionsParser {
 
@@ -44,30 +44,28 @@ protected:
   /// All options not belonging to \p Category become hidden.
   ///
   /// It also allows calls to set the required number of positional parameters.
-  OptionsParser(
-      int &argc, const char **argv, llvm::cl::OptionCategory &Category,
-      const char *Overview = nullptr);
+  OptionsParser(int &argc, const char **argv,
+                llvm::cl::NumOccurrencesFlag OccurrencesFlag,
+                llvm::cl::OptionCategory &Category,
+                const char *Overview = nullptr);
 
 public:
   /// A factory method that is similar to the above constructor, except
   /// this returns an error instead exiting the program on error.
   static llvm::Expected<OptionsParser>
-  create(int &argc, const char **argv, llvm::cl::OptionCategory &Category,
-         const char *Overview = nullptr);
+  create(int &argc, const char **argv,
+         llvm::cl::NumOccurrencesFlag OccurrencesFlag,
+         llvm::cl::OptionCategory &Category, const char *Overview = nullptr);
 
   /// Returns a reference to the loaded compilations database.
-  CompilationDatabase &getCompilations() {
-    return *Compilations;
-  }
+  CompilationDatabase &getCompilations() { return *Compilations; }
 
   /// Returns a list of source file paths to process.
   const std::vector<std::string> &getSourcePathList() const {
     return SourcePathList;
   }
 
-  const std::string &getSourceDirectory() const {
-      return SourcePath;
-  }
+  const std::string &getSourceDirectory() const { return SourcePath; }
 
   /// Returns the argument adjuster calculated from "--extra-arg" and
   //"--extra-arg-before" options.
@@ -79,8 +77,8 @@ private:
   OptionsParser() = default;
 
   llvm::Error init(int &argc, const char **argv,
-                   llvm::cl::OptionCategory &Category,
-                   const char *Overview);
+                   llvm::cl::NumOccurrencesFlag OccurrencesFlag,
+                   llvm::cl::OptionCategory &Category, const char *Overview);
 
   std::unique_ptr<CompilationDatabase> Compilations;
   std::vector<std::string> SourcePathList;
@@ -88,4 +86,4 @@ private:
   ArgumentsAdjuster Adjuster;
 };
 
-}  // namespace meta
+} // namespace meta

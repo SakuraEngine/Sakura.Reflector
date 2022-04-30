@@ -29,6 +29,7 @@ namespace meta {
             J.attribute("rawType", P.rawType);
             serializeAttr(J, P.attrs);
             J.attribute("comment", P.comment);
+            J.attribute("offset", P.offset);
             J.attribute("line", P.line);
         });
     }
