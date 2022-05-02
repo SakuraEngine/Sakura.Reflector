@@ -126,6 +126,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
   std::string attr;
   clang::NamedDecl *attrDecl = decl;
   std::string fileName;
+  std::string absPath;
   {
     Identity ident;
     auto location =
@@ -135,12 +136,13 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       SmallString<1024> AbsolutePath(
           tooling::getAbsolutePath(location.getFilename()));
       llvm::sys::path::remove_dots(AbsolutePath, true);
-      fileName = llvm::sys::path::convert_to_slash(AbsolutePath.str());
+      fileName = absPath =
+          llvm::sys::path::convert_to_slash(AbsolutePath.str());
       root = llvm::sys::path::convert_to_slash(root);
       fileName = calculateRelativeFilePath(root, fileName).str().str();
       if (fileName.empty())
         return;
-      ident.fileName = location.getFilename();
+      ident.fileName = absPath;
       ident.line = location.getLine();
     } else {
       return;
@@ -217,7 +219,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newRecord.comment = comment;
     if (!recordDecl->isAnonymousStructOrUnion()) {
       newRecord.name = recordDecl->getQualifiedNameAsString();
-      newRecord.fileName = location.getFilename();
+      newRecord.fileName = absPath;
       newRecord.line = location.getLine();
       newRecord.attrs = attr;
       for (auto base : recordDecl->bases())
@@ -252,7 +254,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     Enum newEnum;
     newEnum.comment = comment;
     newEnum.name = enumDecl->getQualifiedNameAsString();
-    newEnum.fileName = location.getFilename();
+    newEnum.fileName = absPath;
     newEnum.line = location.getLine();
     newEnum.attrs = attr;
     std::vector<std::string> newStack;
@@ -278,7 +280,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newFunction.isStatic = functionDecl->isStatic();
     newFunction.name = functionDecl->getQualifiedNameAsString();
     if (!location.isInvalid()) {
-      newFunction.fileName = location.getFilename();
+      newFunction.fileName = absPath;
       newFunction.line = location.getLine();
     }
     newFunction.attrs = attr;
