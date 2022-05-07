@@ -55,6 +55,7 @@ struct Enumerator {
 
 struct Enum {
   std::string name;
+  std::string underlying_type;
   std::string attrs;
   std::vector<Enumerator> values;
   std::string fileName;

@@ -257,6 +257,10 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newEnum.fileName = absPath;
     newEnum.line = location.getLine();
     newEnum.attrs = attr;
+    newEnum.underlying_type =
+        enumDecl->isFixed()
+            ? enumDecl->getIntegerType().getAsString(_ASTContext->getLangOpts())
+            : "unfixed";
     std::vector<std::string> newStack;
     for (auto enumerator : enumDecl->enumerators()) {
       Enumerator newEnumerator;
