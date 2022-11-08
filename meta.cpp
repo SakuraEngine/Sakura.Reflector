@@ -23,6 +23,7 @@ void serializeAttr(llvm::json::OStream &J, const std::string &attr) {
 void serialize(llvm::json::OStream &J, const Field &P) {
   J.attributeObject(P.name, [&] {
     J.attribute("type", P.type);
+    J.attribute("arraySize", P.arraySize);
     J.attribute("rawType", P.rawType);
     serializeAttr(J, P.attrs);
     J.attribute("comment", P.comment);

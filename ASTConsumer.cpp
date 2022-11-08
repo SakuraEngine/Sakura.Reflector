@@ -324,9 +324,19 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newField.comment = comment;
     newField.attrs = attr;
     newField.name = fieldDecl->getNameAsString();
-    newField.type = GetTypeName(fieldDecl->getType(), _ASTContext);
-    newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
     newField.line = location.getLine();
+    if(fieldDecl->getType()->isConstantArrayType())
+    {
+      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(fieldDecl->getType());
+      newField.arraySize = ftype->getSize().getZExtValue();
+      newField.type = GetTypeName(ftype->getElementType(), _ASTContext);
+      newField.rawType = GetRawTypeName(ftype->getElementType(), _ASTContext);
+    }
+    else
+    {
+      newField.type = GetTypeName(fieldDecl->getType(), _ASTContext);
+      newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
+    }
     if (record) {
       newField.offset = layout->getFieldOffset(fieldDecl->getFieldIndex()) / 8;
       record->fields.push_back(std::move(newField));

@@ -16,6 +16,7 @@ struct Field {
   std::string rawType;
   std::string attrs;
   std::string comment;
+  size_t arraySize;
   size_t offset;
   int line;
 };
