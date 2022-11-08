@@ -334,6 +334,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     }
     else
     {
+      newField.arraySize = 0;
       newField.type = GetTypeName(fieldDecl->getType(), _ASTContext);
       newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
     }
