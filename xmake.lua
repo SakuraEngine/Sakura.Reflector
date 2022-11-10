@@ -42,8 +42,14 @@ target("meta")
     add_linkdirs("clang+llvm-15.0.1-x86_64-apple-darwin/lib")
     on_load(function (target, opt)
         local libs = {}
-        local p = "clang+llvm-15.0.1-x86_64-apple-darwin/lib/*.a"
+        local p = "clang+llvm-15.0.1-x86_64-apple-darwin/lib/libLLVM*.a"
         for __, filepath in ipairs(os.files(p)) do
+            local basename = path.basename(filepath)
+            local matchname = string.match(basename, "lib(.*)$")
+            table.insert(libs, matchname or basename)
+        end
+        local p2 = "clang+llvm-15.0.1-x86_64-apple-darwin/lib/libclang*.a"
+        for __, filepath in ipairs(os.files(p2)) do
             local basename = path.basename(filepath)
             local matchname = string.match(basename, "lib(.*)$")
             table.insert(libs, matchname or basename)
