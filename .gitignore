@@ -5,3 +5,5 @@
 /.xmake
 /.vscode
 /clang+llvm*
+/clang-*
+/llvm-*
