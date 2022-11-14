@@ -4,6 +4,7 @@ set_languages("c11", "cxx17")
 
 if (is_os("windows")) then 
 
+local windows_llvm_version = "15.0.4"
 target("meta")
     set_runtimes("MD")
     set_kind("binary")
@@ -13,24 +14,24 @@ target("meta")
     add_links("lib/**")
     add_links("Version", "advapi32", "Shcore", "user32", "shell32", "Ole32", {public = true})
     -- llvm & clang
-    add_linkdirs("llvm-14.0.6-windows-amd64-msvc17-msvcrt/lib")
-    add_linkdirs("clang-14.0.6-windows-amd64-msvc17-msvcrt/lib")
+    add_linkdirs("llvm-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt/lib")
+    add_linkdirs("clang-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt/lib")
     on_load(function (target, opt)
         local libs = {}
-        local p = "llvm-14.0.6-windows-amd64-msvc17-msvcrt/lib/*.lib"
+        local p = "llvm-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt/lib/*.lib"
         for __, filepath in ipairs(os.files(p)) do
             local basename = path.basename(filepath)
             table.insert(libs, basename)
         end
-        local p2 = "clang-14.0.6-windows-amd64-msvc17-msvcrt/lib/*.lib"
+        local p2 = "clang-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt/lib/*.lib"
         for __, filepath in ipairs(os.files(p2)) do
             local basename = path.basename(filepath)
             table.insert(libs, basename)
         end
         target:add("links", libs)
     end)
-    add_includedirs("llvm-14.0.6-windows-amd64-msvc17-msvcrt/include")
-    add_includedirs("clang-14.0.6-windows-amd64-msvc17-msvcrt/include")
+    add_includedirs("llvm-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt/include")
+    add_includedirs("clang-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt/include")
 else
 
 target("meta")

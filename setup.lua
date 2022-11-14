@@ -1,17 +1,17 @@
 import("utils.archive")
 import("download")
 
--- windows llvm
 if (os.host() =="windows") then 
-    local release_url = "SakuraEngine/llvm-package-windows/releases/download/llvm-14.0.6/llvm-14.0.6-windows-amd64-msvc17-msvcrt.7z"
-    local zipname = "llvm-14.0.6-windows-amd64-msvc17-msvcrt.7z"
+    local windows_llvm_version = "15.0.4"
+    -- windows llvm
+    local release_url = "SakuraEngine/llvm-package-windows/releases/download/llvm-"..windows_llvm_version.."/llvm-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt.7z"
+    local zipname = "llvm-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt.7z"
     download.file_from_github(release_url, zipname)
     archive.extract("SDKs/"..zipname, os.projectdir())
-end
--- windows clang
-if (os.host() =="windows") then 
-    local release_url = "SakuraEngine/llvm-package-windows/releases/download/llvm-14.0.6/clang-14.0.6-windows-amd64-msvc17-msvcrt.7z"
-    local zipname = "clang-14.0.6-windows-amd64-msvc17-msvcrt.7z"
+    
+    -- windows clang
+    local release_url = "SakuraEngine/llvm-package-windows/releases/download/llvm-"..windows_llvm_version.."/clang-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt.7z"
+    local zipname = "clang-"..windows_llvm_version.."-windows-amd64-msvc17-msvcrt.7z"
     download.file_from_github(release_url, zipname)
     archive.extract("SDKs/"..zipname, os.projectdir())
 end
