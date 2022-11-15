@@ -1,5 +1,5 @@
 set(LLVM_LINK_COMPONENTS support)
-file(GLOB_RECURSE sources *.cpp)
+file(GLOB_RECURSE sources src/*.cpp)
 add_clang_executable(meta
   ${sources}
   )

@@ -8,7 +8,7 @@ local windows_llvm_version = "15.0.4"
 target("meta")
     set_runtimes("MD")
     set_kind("binary")
-    add_files("**.cpp")
+    add_files("src/**.cpp")
     add_cxflags("-Wno-c++11-narrowing")
     add_cxflags("-fno-rtti")
     add_links("lib/**")

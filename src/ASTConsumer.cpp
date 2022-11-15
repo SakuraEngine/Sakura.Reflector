@@ -254,6 +254,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     Enum newEnum;
     newEnum.comment = comment;
     newEnum.name = enumDecl->getQualifiedNameAsString();
+    newEnum.isScoped = enumDecl->isScoped();
     newEnum.fileName = absPath;
     newEnum.line = location.getLine();
     newEnum.attrs = attr;

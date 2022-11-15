@@ -56,6 +56,7 @@ struct Enumerator {
 
 struct Enum {
   std::string name;
+  bool isScoped;
   std::string underlying_type;
   std::string attrs;
   std::vector<Enumerator> values;

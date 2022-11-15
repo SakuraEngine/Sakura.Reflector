@@ -101,6 +101,7 @@ std::string meta::serialize(const Database &P) {
             });
           }
         });
+        J.attribute("isScoped", e.isScoped);
         J.attribute("underlying_type", e.underlying_type);
         J.attribute("comment", e.comment);
         J.attribute("fileName", e.fileName);
