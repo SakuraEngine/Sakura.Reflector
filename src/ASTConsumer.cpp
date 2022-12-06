@@ -9,6 +9,7 @@
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/Type.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/StringRef.h"
@@ -114,6 +115,78 @@ calculateRelativeFilePath(const llvm::StringRef &Path,
   if (!CurrentPath.startswith(Path))
     return {};
   return CurrentPath.substr(Path.size());
+}
+
+class ParmVisitor
+    : public clang::RecursiveASTVisitor<ParmVisitor>
+{
+public:
+    bool VisitParmVarDecl(clang::ParmVarDecl *param) {
+        if (param->getFunctionScopeDepth() != depth) return true;
+        return true;
+        
+        meta::Field newField;
+        auto &sm = consumer->GetContext()->getSourceManager();
+        auto location = sm.getPresumedLoc(param->getLocation());
+        newField.comment = GetComment(param, consumer->GetContext(), sm);
+        newField.attrs = ParseLeafAttribute(param, newStack);
+        newField.name = param->getNameAsString();
+        newField.type = GetTypeName(param->getType(), consumer->GetContext());
+        newField.rawType = GetRawTypeName(param->getType(), consumer->GetContext());
+        newField.line = location.getLine();
+        newField.offset = 0;
+        consumer->HandleFunctionPointer(param, newField, depth+1);
+        function.parameters.push_back(std::move(newField));
+    }
+
+    int depth;
+    meta::Function function;
+    std::vector<std::string> newStack;
+    meta::ASTConsumer *consumer;
+};
+
+void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field, int depth)
+{
+  field.isFunctor = false;
+  field.isCallback = false;
+  clang::QualType Ty = decl->getType();
+  bool isFunctor = false;
+  const clang::TemplateSpecializationType *TST = Ty->getAs<clang::TemplateSpecializationType>();
+  if(TST->getNumArgs() != 0)
+  {
+    //is first arg a function pointer?
+    if(TST->getArg(0).getKind() != clang::TemplateArgument::Type)
+      return;
+    Ty = TST->getArg(0).getAsType();
+    isFunctor = true;
+  }
+  if (Ty->isFunctionPointerType())
+    Ty = Ty->castAs<PointerType>()->getPointeeType();
+  else if (Ty->isFunctionReferenceType())
+    Ty = Ty->castAs<ReferenceType>()->getPointeeType();
+  else if (Ty->isConstantArrayType())
+    Ty = Ty->getAsArrayTypeUnsafe()->getElementType();
+  else
+    return;
+
+  auto type = Ty->getAs<clang::FunctionType>();
+  if(!type)
+    return;
+
+  ParmVisitor pv;
+  pv.consumer = this;
+  pv.depth = depth;
+  pv.TraverseDecl(decl);
+  pv.function.attrs = field.attrs;
+  pv.function.name = field.name;
+  pv.function.fileName = "";
+  pv.function.isStatic = true;
+  pv.function.isConst = false;
+  pv.function.line = field.line;
+  pv.function.comment = field.comment;
+  field.isFunctor = isFunctor;
+  field.isCallback = true;
+  field.signature = std::move(pv.function);
 }
 
 void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
@@ -310,6 +383,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       newField.rawType = GetRawTypeName(param->getType(), _ASTContext);
       newField.line = location.getLine();
       newField.offset = 0;
+      HandleFunctionPointer(param, newField, 1);
       newFunction.parameters.push_back(std::move(newField));
     }
     if (record)
@@ -339,6 +413,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       newField.type = GetTypeName(fieldDecl->getType(), _ASTContext);
       newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
     }
+    HandleFunctionPointer(fieldDecl, newField, 0);
     if (record) {
       newField.offset = layout->getFieldOffset(fieldDecl->getFieldIndex()) / 8;
       record->fields.push_back(std::move(newField));
@@ -356,6 +431,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newField.type = GetTypeName(varDecl->getType(), _ASTContext);
     newField.line = location.getLine();
     newField.offset = 0;
+    HandleFunctionPointer(varDecl, newField, 0);
     if (record)
       record->statics.push_back(std::move(newField));
     else

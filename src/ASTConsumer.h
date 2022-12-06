@@ -19,7 +19,9 @@ public:
   ASTConsumer(FileDataMap &datamap, std::string root)
       : datamap(datamap), root(root) {}
   void HandleTranslationUnit(ASTContext &ctx) override;
+  ASTContext* GetContext() { return _ASTContext; }
 
+  void HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field, int depth);
 protected:
   FileDataMap &datamap;
   std::string root;

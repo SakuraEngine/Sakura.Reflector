@@ -10,6 +10,20 @@
 #include <unordered_map>
 
 namespace meta {
+
+struct Function {
+  bool isStatic;
+  bool isConst;
+  std::string name;
+  std::string attrs;
+  std::string comment;
+  std::vector<struct Field> parameters;
+  std::string retType;
+  std::string rawRetType;
+  std::string fileName;
+  int line;
+};
+
 struct Field {
   std::string name;
   std::string type;
@@ -18,19 +32,9 @@ struct Field {
   std::string comment;
   size_t arraySize;
   size_t offset;
-  int line;
-};
-
-struct Function {
-  bool isStatic;
-  bool isConst;
-  std::string name;
-  std::string attrs;
-  std::string comment;
-  std::vector<Field> parameters;
-  std::string retType;
-  std::string rawRetType;
-  std::string fileName;
+  bool isFunctor;
+  bool isCallback;
+  Function signature;
   int line;
 };
 

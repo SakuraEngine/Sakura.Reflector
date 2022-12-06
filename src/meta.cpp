@@ -20,12 +20,21 @@ void serializeAttr(llvm::json::OStream &J, const std::string &attr) {
   J.attributeEnd();
 }
 
+void serialize(llvm::json::OStream &J, const Function &P, bool method);
+
 void serialize(llvm::json::OStream &J, const Field &P) {
   J.attributeObject(P.name, [&] {
     J.attribute("type", P.type);
     J.attribute("arraySize", P.arraySize);
     J.attribute("rawType", P.rawType);
     serializeAttr(J, P.attrs);
+    J.attribute("isFunctor", P.isFunctor);
+    J.attribute("isCallback", P.isCallback);
+    if(P.isFunctor) {
+      J.attributeBegin("functor");
+      serialize(J, P.signature, false);
+      J.attributeEnd();
+    }
     J.attribute("comment", P.comment);
     J.attribute("offset", P.offset);
     J.attribute("line", P.line);
