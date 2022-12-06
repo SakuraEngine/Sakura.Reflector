@@ -21,7 +21,7 @@ public:
   void HandleTranslationUnit(ASTContext &ctx) override;
   ASTContext* GetContext() { return _ASTContext; }
 
-  void HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field, int depth);
+  void HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field);
 protected:
   FileDataMap &datamap;
   std::string root;

@@ -30,7 +30,8 @@ void serialize(llvm::json::OStream &J, const Field &P) {
     serializeAttr(J, P.attrs);
     J.attribute("isFunctor", P.isFunctor);
     J.attribute("isCallback", P.isCallback);
-    if(P.isFunctor) {
+    J.attribute("isAnonymous", P.isAnonymous);
+    if(P.isCallback) {
       J.attributeBegin("functor");
       serialize(J, P.signature, false);
       J.attributeEnd();

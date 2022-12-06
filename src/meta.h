@@ -30,10 +30,11 @@ struct Field {
   std::string rawType;
   std::string attrs;
   std::string comment;
-  size_t arraySize;
+  size_t arraySize = 0;
   size_t offset;
-  bool isFunctor;
-  bool isCallback;
+  bool isFunctor = false;
+  bool isCallback = false;
+  bool isAnonymous = false;
   Function signature;
   int line;
 };
