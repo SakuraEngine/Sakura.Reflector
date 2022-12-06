@@ -192,6 +192,12 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
     Ty = TST->getArg(0).getAsType();
     isFunctor = true;
   }
+  TDT = Ty->getAs<TypedefType>();
+  if(TDT)
+  {
+    trueDecl = TDT->getDecl();
+    Ty = TDT->getDecl()->getUnderlyingType();
+  }
   if (Ty->isFunctionPointerType())
     Ty = Ty->castAs<PointerType>()->getPointeeType();
   else if (Ty->isFunctionReferenceType())
