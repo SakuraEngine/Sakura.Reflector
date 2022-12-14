@@ -105,7 +105,14 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
   {
     if(DoubleDash[1][0] == '@')
     {
-      Compilations = FixedCompilationDatabase::loadFromFile(DoubleDash[1] + 1, ErrorMessage);
+      llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> File =
+      llvm::MemoryBuffer::getFile(DoubleDash[1] + 1);
+      if (std::error_code Result = File.getError()) {
+        ErrorMessage = "Error while opening fixed database: " + Result.message();
+        return llvm::make_error<llvm::StringError>(ErrorMessage,
+                                                  llvm::inconvertibleErrorCode());
+      }
+      Compilations = FixedCompilationDatabase::loadFromBuffer(".",(*File)->getBuffer(), ErrorMessage);
       argc = DoubleDash - argv;
     }
     else
