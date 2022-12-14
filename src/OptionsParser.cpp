@@ -106,6 +106,7 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
     if(DoubleDash[1][0] == '@')
     {
       Compilations = FixedCompilationDatabase::loadFromFile(DoubleDash[1] + 1, ErrorMessage);
+      argc = DoubleDash - argv;
     }
     else
     {
