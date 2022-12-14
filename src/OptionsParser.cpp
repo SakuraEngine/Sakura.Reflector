@@ -100,8 +100,18 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
   cl::HideUnrelatedOptions(Category);
 
   std::string ErrorMessage;
-  Compilations =
-      FixedCompilationDatabase::loadFromCommandLine(argc, argv, ErrorMessage);
+  const char *const *DoubleDash = std::find(argv, argv + argc, StringRef("--"));
+  if (DoubleDash != argv + argc)
+  {
+    if(DoubleDash[1][0] == '@')
+    {
+      Compilations = FixedCompilationDatabase::loadFromFile(DoubleDash[1] + 1, ErrorMessage);
+    }
+    else
+    {
+      Compilations = FixedCompilationDatabase::loadFromCommandLine(argc, argv, ErrorMessage);
+    }
+  }
   if (!ErrorMessage.empty())
     ErrorMessage.append("\n");
   llvm::raw_string_ostream OS(ErrorMessage);
