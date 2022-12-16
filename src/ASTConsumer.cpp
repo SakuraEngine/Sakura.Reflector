@@ -211,13 +211,21 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
   pv.consumer = this;
   pv.decl = trueDecl;
   pv.TraverseDecl(trueDecl);
+
+  auto &sm = GetContext()->getSourceManager();
+  auto location = sm.getPresumedLoc(trueDecl->getLocation());
   pv.function.attrs = field.attrs;
   pv.function.name = field.name;
-  pv.function.fileName = "";
+  SmallString<1024> AbsolutePath(
+      tooling::getAbsolutePath(location.getFilename()));
+  llvm::sys::path::remove_dots(AbsolutePath, true);
+  pv.function.fileName = llvm::sys::path::convert_to_slash(AbsolutePath.str());
   pv.function.isStatic = true;
   pv.function.isConst = false;
-  pv.function.line = field.line;
-  pv.function.comment = field.comment;
+  pv.function.line = location.getLine();
+  pv.function.comment = GetComment(trueDecl, GetContext(), sm);
+  pv.function.retType = GetTypeName(type->getReturnType(), GetContext());
+  pv.function.rawRetType = GetRawTypeName(type->getReturnType(), GetContext());
   field.isFunctor = isFunctor;
   field.isCallback = true;
   field.signature = std::move(pv.function);
