@@ -182,15 +182,18 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
     trueDecl = TDT->getDecl();
     Ty = TDT->getDecl()->getUnderlyingType();
   }
-  const clang::TemplateSpecializationType *TST = Ty->getAs<clang::TemplateSpecializationType>();
   bool isFunctor = false;
-  if(TST && TST->getNumArgs() != 0)
+  if(auto TST = Ty->getAs<clang::TemplateSpecializationType>())
   {
-    //is first arg a function pointer?
-    if(TST->getArg(0).getKind() != clang::TemplateArgument::Type)
-      return;
-    Ty = TST->getArg(0).getAsType();
-    isFunctor = true;
+    auto Arguments = TST->template_arguments();
+    if (Arguments.size() != 0)
+    {
+      //is first arg a function pointer?
+      if(Arguments[0].getKind() != clang::TemplateArgument::Type)
+        return;
+      Ty = Arguments[0].getAsType();
+      isFunctor = true;
+    }
   }
   TDT = Ty->getAs<TypedefType>();
   if(TDT)
