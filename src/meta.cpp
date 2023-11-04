@@ -48,6 +48,7 @@ void serialize(llvm::json::OStream &J, const Function &P, bool method) {
     J.attribute("name", P.name);
     J.attribute("isStatic", P.isStatic);
     J.attribute("isConst", P.isConst);
+    J.attribute("isNothrow", P.isNothrow);
     serializeAttr(J, P.attrs);
     J.attribute("comment", P.comment);
     J.attributeObject("parameters", [&] {

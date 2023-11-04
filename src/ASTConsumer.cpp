@@ -224,6 +224,8 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
   llvm::sys::path::remove_dots(AbsolutePath, true);
   pv.function.fileName = llvm::sys::path::convert_to_slash(AbsolutePath.str());
   pv.function.isStatic = true;
+  auto proto = type->getAs<clang::FunctionProtoType>();
+  pv.function.isNothrow = proto ? proto->isNothrow() : false;
   pv.function.isConst = false;
   pv.function.line = location.getLine();
   pv.function.comment = GetComment(trueDecl, GetContext(), sm);
@@ -401,6 +403,8 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     Function newFunction;
     newFunction.comment = comment;
     newFunction.isStatic = functionDecl->isStatic();
+    auto proto = functionDecl->getType()->getAs<clang::FunctionProtoType>();
+    newFunction.isNothrow = proto ? proto->isNothrow() : false;
     newFunction.name = functionDecl->getQualifiedNameAsString();
     if (!location.isInvalid()) {
       newFunction.fileName = absPath;

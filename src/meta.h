@@ -14,6 +14,7 @@ namespace meta {
 struct Function {
   bool isStatic;
   bool isConst;
+  bool isNothrow;
   std::string name;
   std::string attrs;
   std::string comment;
