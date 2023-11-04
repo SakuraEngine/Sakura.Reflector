@@ -10,3 +10,7 @@
 /.cache
 /.history
 compile_commands.json
+/bin
+/lib
+/share
+/libexec

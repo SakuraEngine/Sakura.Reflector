@@ -12,8 +12,9 @@ end
 
 -- macos llvm & clang
 if (os.host() =="macosx") then 
-    local release_url = "llvm/llvm-project/releases/download/llvmorg-17.0.1/clang+llvm-17.0.1-x86_64-apple-darwin.tar.xz"
-    local zipname = "clang+llvm-17.0.1-x86_64-apple-darwin.tar.xz"
+    local macosx_llvm_version = "17.0.1"
+    local release_url = "SakuraEngine/llvm-build/releases/download/llvm-darwin-"..macosx_llvm_version.."/llvm-darwin-"..macosx_llvm_version.."-clang-x86_64-release.7z"
+    local zipname = "llvm-darwin-"..macosx_llvm_version.."-clang-x86_64-release.7z"
     download.file_from_github(release_url, zipname)
     archive.extract("SDKs/"..zipname, os.projectdir())
 end
