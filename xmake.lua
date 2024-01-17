@@ -12,6 +12,7 @@ target("meta")
     add_links("lib/**")
     add_links("Version", "advapi32", "Shcore", "user32", "shell32", "Ole32", {public = true})
     add_includedirs("include")
+
 else
 
 add_requires("zstd")
@@ -34,4 +35,5 @@ target("meta")
         end
         target:add("links", libs)
     end)
+    
 end

@@ -1,10 +1,16 @@
-name: macos-build-shipping
+name: macos-build-arm
 
 on: [push, pull_request]
   
 jobs:
- build-macos-shipping:
-    runs-on: macos-12
+ build-macos-arm:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ arm64 ]
+
+    name: build-macos-${{ matrix.arch }}
+    runs-on: flyci-macos-large-latest-m1
     steps:
     - uses: actions/checkout@v2
       with:
@@ -19,10 +25,10 @@ jobs:
         xmake l setup.lua
     - name: Shipping
       run: |
-        xmake f -m release -y --policies=build.ccache:n
+        xmake f -m release -y --policies=build.ccache:n --arch=${{ matrix.arch }}
         xmake -y -v
     - name: UploadShipping
       uses: actions/upload-artifact@v3
       with:
-        name: artifacts
+        name: artifacts-${{ matrix.arch }}
         path: build

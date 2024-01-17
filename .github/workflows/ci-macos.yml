@@ -1,10 +1,16 @@
-name: windows-build-shipping
+name: macos-build-x86_64
 
 on: [push, pull_request]
   
 jobs:
- build-windows-shipping:
-    runs-on: windows-latest
+ build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ x86_64 ]
+
+    name: build-macos-${{ matrix.arch }}
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v2
       with:
@@ -19,10 +25,10 @@ jobs:
         xmake l setup.lua
     - name: Shipping
       run: |
-        xmake f -m release --cc=clang-cl --cxx=clang-cl -c -y -v --policies=build.ccache:n
+        xmake f -m release -y --policies=build.ccache:n --arch=${{ matrix.arch }}
         xmake -y -v
     - name: UploadShipping
       uses: actions/upload-artifact@v3
       with:
-        name: artifacts
+        name: artifacts-${{ matrix.arch }}
         path: build
