@@ -31,6 +31,7 @@ struct Field {
   std::string rawType;
   std::string attrs;
   std::string comment;
+  std::string defaultValue;
   size_t arraySize = 0;
   size_t offset;
   bool isFunctor = false;

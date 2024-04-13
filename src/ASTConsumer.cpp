@@ -138,6 +138,8 @@ public:
         newField.comment = GetComment(param, consumer->GetContext(), sm);
         newField.attrs = ParseLeafAttribute(param, newStack);
         newField.name = param->getNameAsString();
+        // no default value for function pointer
+        newField.defaultValue = "";
         if(newField.name.empty())
         {
           newField.name = "unnamed" + std::to_string(param->getFunctionScopeIndex());
@@ -427,6 +429,19 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       Field newField;
       newField.comment = GetComment(param, _ASTContext, sm);
       newField.attrs = ParseLeafAttribute(param, newStack);
+      if(param->hasDefaultArg())
+      {
+        llvm::raw_string_ostream s(newField.defaultValue);
+        if(param->hasUninstantiatedDefaultArg())
+        {
+          auto defArg = param->getUninstantiatedDefaultArg();
+          defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
+        }
+        else {
+          auto defArg = param->getDefaultArg();
+          defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
+        }
+      }  
       newField.name = param->getNameAsString();
       if(newField.name.empty())
       {
@@ -477,6 +492,12 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       newField.arraySize = 0;
       newField.type = GetTypeName(fieldDecl->getType(), _ASTContext);
       newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
+    }
+    if(fieldDecl->hasInClassInitializer())
+    {
+      llvm::raw_string_ostream s(newField.defaultValue);
+      auto defArg = fieldDecl->getInClassInitializer();
+      defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
     }
     HandleFunctionPointer(fieldDecl, newField);
     if (record) {

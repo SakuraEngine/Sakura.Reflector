@@ -36,6 +36,7 @@ void serialize(llvm::json::OStream &J, const Field &P) {
       serialize(J, P.signature, false);
       J.attributeEnd();
     }
+    J.attribute("defaultValue", P.defaultValue);
     J.attribute("comment", P.comment);
     J.attribute("offset", P.offset);
     J.attribute("line", P.line);
