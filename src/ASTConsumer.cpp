@@ -93,6 +93,21 @@ std::string ParseLeafAttribute(clang::NamedDecl *decl,
   return attr;
 }
 
+std::string GetAccessString(clang::AccessSpecifier access)
+{
+  switch(access)
+  {
+    case clang::AS_public:
+      return "public";
+    case clang::AS_protected:
+      return "protected";
+    case clang::AS_private:
+      return "private";
+    case clang::AS_none:
+      return "none";
+  }
+}
+
 std::string GetComment(clang::Decl *decl, clang::ASTContext *ctx,
                        clang::SourceManager &sm) {
   using namespace clang;
@@ -134,6 +149,7 @@ public:
         meta::Field newField;
         auto &sm = consumer->GetContext()->getSourceManager();
         auto location = sm.getPresumedLoc(param->getLocation());
+        newField.access = GetAccessString(clang::AS_none);
         newField.arraySize = 0;
         newField.comment = GetComment(param, consumer->GetContext(), sm);
         newField.attrs = ParseLeafAttribute(param, newStack);
@@ -171,6 +187,7 @@ public:
     meta::ASTConsumer *consumer;
     clang::Decl* decl;
 };
+
 
 void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field)
 {
@@ -221,6 +238,7 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
   auto location = sm.getPresumedLoc(trueDecl->getLocation());
   pv.function.attrs = field.attrs;
   pv.function.name = field.name;
+  pv.function.access = GetAccessString(AS_none);
   SmallString<1024> AbsolutePath(
       tooling::getAbsolutePath(location.getFilename()));
   llvm::sys::path::remove_dots(AbsolutePath, true);
@@ -237,7 +255,6 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
   field.isCallback = true;
   field.signature = std::move(pv.function);
 }
-
 void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
                                    std::vector<std::string> &attrStack,
                                    ParseBehavior behavior, Record *record,
@@ -339,6 +356,17 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     }
     Record newRecord;
     newRecord.comment = comment;
+    //check if the record is nested in other record
+    {
+      clang::DeclContext *parent = recordDecl->getDeclContext();
+      while (parent) {
+        if (auto parentRecord = llvm::dyn_cast<clang::CXXRecordDecl>(parent)) {
+          newRecord.isNested = true;
+          break;
+        }
+        parent = parent->getParent();
+      }
+    }
     if (!recordDecl->isAnonymousStructOrUnion()) {
       newRecord.name = recordDecl->getQualifiedNameAsString();
       newRecord.fileName = absPath;
@@ -403,6 +431,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     if (!functionDecl)
       return;
     Function newFunction;
+    newFunction.access = GetAccessString(functionDecl->getAccess());
     newFunction.comment = comment;
     newFunction.isStatic = functionDecl->isStatic();
     auto proto = functionDecl->getType()->getAs<clang::FunctionProtoType>();
@@ -429,6 +458,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       Field newField;
       newField.comment = GetComment(param, _ASTContext, sm);
       newField.attrs = ParseLeafAttribute(param, newStack);
+      newField.access = GetAccessString(clang::AS_none);
       if(param->hasDefaultArg())
       {
         llvm::raw_string_ostream s(newField.defaultValue);
@@ -478,6 +508,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     Field newField;
     newField.comment = comment;
     newField.attrs = attr;
+    newField.access = GetAccessString(fieldDecl->getAccess());
     newField.name = fieldDecl->getNameAsString();
     newField.line = location.getLine();
     if(fieldDecl->getType()->isConstantArrayType())
@@ -511,6 +542,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     if (!varDecl || !varDecl->isStaticDataMember())
       return;
     Field newField;
+    newField.access = GetAccessString(varDecl->getAccess());
     newField.comment = comment;
     newField.attrs = attr;
     newField.name = varDecl->getNameAsString();

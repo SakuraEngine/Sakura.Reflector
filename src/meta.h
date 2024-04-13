@@ -21,6 +21,7 @@ struct Function {
   std::vector<struct Field> parameters;
   std::string retType;
   std::string rawRetType;
+  std::string access = "none";
   std::string fileName;
   int line;
 };
@@ -39,6 +40,7 @@ struct Field {
   bool isAnonymous = false;
   Function signature;
   int line;
+  std::string access = "none";
 };
 
 struct Record {
@@ -51,6 +53,7 @@ struct Record {
   std::vector<Function> methods;
   std::string fileName;
   int line;
+  bool isNested;
 };
 
 struct Enumerator {
