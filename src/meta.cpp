@@ -27,6 +27,7 @@ void serialize(llvm::json::OStream &J, const Field &P) {
     J.attribute("type", P.type);
     J.attribute("arraySize", P.arraySize);
     J.attribute("rawType", P.rawType);
+    J.attribute("access", P.access);
     serializeAttr(J, P.attrs);
     J.attribute("isFunctor", P.isFunctor);
     J.attribute("isCallback", P.isCallback);
@@ -36,6 +37,7 @@ void serialize(llvm::json::OStream &J, const Field &P) {
       serialize(J, P.signature, false);
       J.attributeEnd();
     }
+    J.attribute("defaultValue", P.defaultValue);
     J.attribute("comment", P.comment);
     J.attribute("offset", P.offset);
     J.attribute("line", P.line);
@@ -49,6 +51,7 @@ void serialize(llvm::json::OStream &J, const Function &P, bool method) {
     J.attribute("isStatic", P.isStatic);
     J.attribute("isConst", P.isConst);
     J.attribute("isNothrow", P.isNothrow);
+    J.attribute("access", P.access);
     serializeAttr(J, P.attrs);
     J.attribute("comment", P.comment);
     J.attributeObject("parameters", [&] {
@@ -86,6 +89,7 @@ std::string meta::serialize(const Database &P) {
           for (auto f : record.methods)
             serialize(J, f, true);
         });
+        J.attribute("isNested", record.isNested);
         J.attribute("comment", record.comment);
         J.attribute("fileName", record.fileName);
         J.attribute("line", record.line);
