@@ -85,6 +85,10 @@ std::string meta::serialize(const Database &P) {
           for (auto field : record.fields)
             serialize(J, field);
         });
+        J.attributeArray("statics", [&] {
+          for (auto field : record.statics)
+            serialize(J, field);
+        });
         J.attributeArray("methods", [&] {
           for (auto f : record.methods)
             serialize(J, f, true);
