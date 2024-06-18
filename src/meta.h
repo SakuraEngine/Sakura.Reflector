@@ -34,10 +34,10 @@ struct Field {
   std::string comment;
   std::string defaultValue;
   size_t arraySize = 0;
-  size_t offset;
   bool isFunctor = false;
   bool isCallback = false;
   bool isAnonymous = false;
+  bool isStatic = false;
   Function signature;
   int line;
   std::string access = "none";
@@ -49,7 +49,6 @@ struct Record {
   std::string attrs;
   std::string comment;
   std::vector<Field> fields;
-  std::vector<Field> statics;
   std::vector<Function> methods;
   std::string fileName;
   int line;

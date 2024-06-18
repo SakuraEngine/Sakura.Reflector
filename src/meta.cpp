@@ -32,14 +32,14 @@ void serialize(llvm::json::OStream &J, const Field &P) {
     J.attribute("isFunctor", P.isFunctor);
     J.attribute("isCallback", P.isCallback);
     J.attribute("isAnonymous", P.isAnonymous);
-    if(P.isCallback) {
+    J.attribute("isStatic", P.isStatic);
+    if (P.isCallback) {
       J.attributeBegin("functor");
       serialize(J, P.signature, false);
       J.attributeEnd();
     }
     J.attribute("defaultValue", P.defaultValue);
     J.attribute("comment", P.comment);
-    J.attribute("offset", P.offset);
     J.attribute("line", P.line);
   });
 }
@@ -83,10 +83,6 @@ std::string meta::serialize(const Database &P) {
         serializeAttr(J, record.attrs);
         J.attributeObject("fields", [&] {
           for (auto field : record.fields)
-            serialize(J, field);
-        });
-        J.attributeArray("statics", [&] {
-          for (auto field : record.statics)
             serialize(J, field);
         });
         J.attributeArray("methods", [&] {

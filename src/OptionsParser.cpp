@@ -101,23 +101,22 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
 
   std::string ErrorMessage;
   const char *const *DoubleDash = std::find(argv, argv + argc, StringRef("--"));
-  if (DoubleDash != argv + argc)
-  {
-    if(DoubleDash[1][0] == '@')
-    {
+  if (DoubleDash != argv + argc) {
+    if (DoubleDash[1][0] == '@') {
       llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> File =
-      llvm::MemoryBuffer::getFile(DoubleDash[1] + 1);
+          llvm::MemoryBuffer::getFile(DoubleDash[1] + 1);
       if (std::error_code Result = File.getError()) {
-        ErrorMessage = "Error while opening fixed database: " + Result.message();
-        return llvm::make_error<llvm::StringError>(ErrorMessage,
-                                                  llvm::inconvertibleErrorCode());
+        ErrorMessage =
+            "Error while opening fixed database: " + Result.message();
+        return llvm::make_error<llvm::StringError>(
+            ErrorMessage, llvm::inconvertibleErrorCode());
       }
-      Compilations = FixedCompilationDatabase::loadFromBuffer(".",(*File)->getBuffer(), ErrorMessage);
+      Compilations = FixedCompilationDatabase::loadFromBuffer(
+          ".", (*File)->getBuffer(), ErrorMessage);
       argc = DoubleDash - argv;
-    }
-    else
-    {
-      Compilations = FixedCompilationDatabase::loadFromCommandLine(argc, argv, ErrorMessage);
+    } else {
+      Compilations = FixedCompilationDatabase::loadFromCommandLine(
+          argc, argv, ErrorMessage);
     }
   }
   if (!ErrorMessage.empty())

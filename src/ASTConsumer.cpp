@@ -8,8 +8,8 @@
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/AST/RecordLayout.h"
-#include "clang/AST/Type.h"
 #include "clang/AST/RecursiveASTVisitor.h"
+#include "clang/AST/Type.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/StringRef.h"
@@ -93,18 +93,16 @@ std::string ParseLeafAttribute(clang::NamedDecl *decl,
   return attr;
 }
 
-std::string GetAccessString(clang::AccessSpecifier access)
-{
-  switch(access)
-  {
-    case clang::AS_public:
-      return "public";
-    case clang::AS_protected:
-      return "protected";
-    case clang::AS_private:
-      return "private";
-    case clang::AS_none:
-      return "none";
+std::string GetAccessString(clang::AccessSpecifier access) {
+  switch (access) {
+  case clang::AS_public:
+    return "public";
+  case clang::AS_protected:
+    return "protected";
+  case clang::AS_private:
+    return "private";
+  case clang::AS_none:
+    return "none";
   }
 }
 
@@ -132,91 +130,82 @@ calculateRelativeFilePath(const llvm::StringRef &Path,
   return CurrentPath.substr(Path.size());
 }
 
-class ParmVisitor
-    : public clang::RecursiveASTVisitor<ParmVisitor>
-{
+class ParmVisitor : public clang::RecursiveASTVisitor<ParmVisitor> {
 public:
-    bool VisitParmVarDecl(clang::ParmVarDecl *param) {
-        if (param == decl)
-        {
-          // initialize depth by the current depth
-          depth = param->getFunctionScopeDepth() + 1;
-          return true;
-        }
-        // only visit parameters in the same scope
-        if (param->getFunctionScopeDepth() != depth)
-          return true;
-        meta::Field newField;
-        auto &sm = consumer->GetContext()->getSourceManager();
-        auto location = sm.getPresumedLoc(param->getLocation());
-        newField.access = GetAccessString(clang::AS_none);
-        newField.arraySize = 0;
-        newField.comment = GetComment(param, consumer->GetContext(), sm);
-        newField.attrs = ParseLeafAttribute(param, newStack);
-        newField.name = param->getNameAsString();
-        // no default value for function pointer
-        newField.defaultValue = "";
-        if(newField.name.empty())
-        {
-          newField.name = "unnamed" + std::to_string(param->getFunctionScopeIndex());
-          newField.isAnonymous = true;
-        }
-        if(param->getType()->isConstantArrayType())
-        {
-          auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
-          newField.arraySize = ftype->getSize().getZExtValue();
-          newField.type = GetTypeName(ftype->getElementType(), consumer->GetContext());
-          newField.rawType = GetRawTypeName(ftype->getElementType(), consumer->GetContext());
-        }
-        else
-        {
-          newField.arraySize = 0;
-          newField.type = GetTypeName(param->getType(), consumer->GetContext());
-          newField.rawType = GetRawTypeName(param->getType(), consumer->GetContext());
-        }
-        newField.line = location.getLine();
-        newField.offset = 0;
-        consumer->HandleFunctionPointer(param, newField);
-        function.parameters.push_back(std::move(newField));
-        return true;
+  bool VisitParmVarDecl(clang::ParmVarDecl *param) {
+    if (param == decl) {
+      // initialize depth by the current depth
+      depth = param->getFunctionScopeDepth() + 1;
+      return true;
     }
+    // only visit parameters in the same scope
+    if (param->getFunctionScopeDepth() != depth)
+      return true;
+    meta::Field newField;
+    auto &sm = consumer->GetContext()->getSourceManager();
+    auto location = sm.getPresumedLoc(param->getLocation());
+    newField.access = GetAccessString(clang::AS_none);
+    newField.arraySize = 0;
+    newField.comment = GetComment(param, consumer->GetContext(), sm);
+    newField.attrs = ParseLeafAttribute(param, newStack);
+    newField.name = param->getNameAsString();
+    // no default value for function pointer
+    newField.defaultValue = "";
+    if (newField.name.empty()) {
+      newField.name =
+          "unnamed" + std::to_string(param->getFunctionScopeIndex());
+      newField.isAnonymous = true;
+    }
+    if (param->getType()->isConstantArrayType()) {
+      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
+      newField.arraySize = ftype->getSize().getZExtValue();
+      newField.type =
+          GetTypeName(ftype->getElementType(), consumer->GetContext());
+      newField.rawType =
+          GetRawTypeName(ftype->getElementType(), consumer->GetContext());
+    } else {
+      newField.arraySize = 0;
+      newField.type = GetTypeName(param->getType(), consumer->GetContext());
+      newField.rawType =
+          GetRawTypeName(param->getType(), consumer->GetContext());
+    }
+    newField.line = location.getLine();
+    consumer->HandleFunctionPointer(param, newField);
+    function.parameters.push_back(std::move(newField));
+    return true;
+  }
 
-    int depth;
-    meta::Function function;
-    std::vector<std::string> newStack;
-    meta::ASTConsumer *consumer;
-    clang::Decl* decl;
+  int depth;
+  meta::Function function;
+  std::vector<std::string> newStack;
+  meta::ASTConsumer *consumer;
+  clang::Decl *decl;
 };
 
-
-void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field)
-{
-  clang::Decl* trueDecl = decl;
+void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl *decl,
+                                              meta::Field &field) {
+  clang::Decl *trueDecl = decl;
   field.isFunctor = false;
   field.isCallback = false;
   clang::QualType Ty = decl->getType();
-  const clang::TypedefType* TDT = Ty->getAs<TypedefType>();
-  if(TDT)
-  {
+  const clang::TypedefType *TDT = Ty->getAs<TypedefType>();
+  if (TDT) {
     trueDecl = TDT->getDecl();
     Ty = TDT->getDecl()->getUnderlyingType();
   }
   bool isFunctor = false;
-  if(auto TST = Ty->getAs<clang::TemplateSpecializationType>())
-  {
+  if (auto TST = Ty->getAs<clang::TemplateSpecializationType>()) {
     auto Arguments = TST->template_arguments();
-    if (Arguments.size() != 0)
-    {
-      //is first arg a function pointer?
-      if(Arguments[0].getKind() != clang::TemplateArgument::Type)
+    if (Arguments.size() != 0) {
+      // is first arg a function pointer?
+      if (Arguments[0].getKind() != clang::TemplateArgument::Type)
         return;
       Ty = Arguments[0].getAsType();
       isFunctor = true;
     }
   }
   TDT = Ty->getAs<TypedefType>();
-  if(TDT)
-  {
+  if (TDT) {
     trueDecl = TDT->getDecl();
     Ty = TDT->getDecl()->getUnderlyingType();
   }
@@ -227,7 +216,7 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl* decl, meta:
   else if (Ty->isConstantArrayType())
     Ty = Ty->getAsArrayTypeUnsafe()->getElementType();
   auto type = Ty->getAs<clang::FunctionType>();
-  if(!type)
+  if (!type)
     return;
   ParmVisitor pv;
   pv.consumer = this;
@@ -356,7 +345,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     }
     Record newRecord;
     newRecord.comment = comment;
-    //check if the record is nested in other record
+    // check if the record is nested in other record
     {
       clang::DeclContext *parent = recordDecl->getDeclContext();
       while (parent) {
@@ -459,40 +448,33 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       newField.comment = GetComment(param, _ASTContext, sm);
       newField.attrs = ParseLeafAttribute(param, newStack);
       newField.access = GetAccessString(clang::AS_none);
-      if(param->hasDefaultArg())
-      {
+      if (param->hasDefaultArg()) {
         llvm::raw_string_ostream s(newField.defaultValue);
-        if(param->hasUninstantiatedDefaultArg())
-        {
+        if (param->hasUninstantiatedDefaultArg()) {
           auto defArg = param->getUninstantiatedDefaultArg();
           defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
-        }
-        else {
+        } else {
           auto defArg = param->getDefaultArg();
           defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
         }
-      }  
+      }
       newField.name = param->getNameAsString();
-      if(newField.name.empty())
-      {
-        newField.name = "unnamed" + std::to_string(newFunction.parameters.size());
+      if (newField.name.empty()) {
+        newField.name =
+            "unnamed" + std::to_string(newFunction.parameters.size());
         newField.isAnonymous = true;
       }
-      if(param->getType()->isConstantArrayType())
-      {
+      if (param->getType()->isConstantArrayType()) {
         auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
         newField.arraySize = ftype->getSize().getZExtValue();
         newField.type = GetTypeName(ftype->getElementType(), _ASTContext);
         newField.rawType = GetRawTypeName(ftype->getElementType(), _ASTContext);
-      }
-      else
-      {
+      } else {
         newField.arraySize = 0;
         newField.type = GetTypeName(param->getType(), _ASTContext);
         newField.rawType = GetRawTypeName(param->getType(), _ASTContext);
       }
       newField.line = location.getLine();
-      newField.offset = 0;
       HandleFunctionPointer(param, newField);
       newFunction.parameters.push_back(std::move(newField));
     }
@@ -509,30 +491,27 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newField.comment = comment;
     newField.attrs = attr;
     newField.access = GetAccessString(fieldDecl->getAccess());
+    newField.isStatic = false;
     newField.name = fieldDecl->getNameAsString();
     newField.line = location.getLine();
-    if(fieldDecl->getType()->isConstantArrayType())
-    {
-      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(fieldDecl->getType());
+    if (fieldDecl->getType()->isConstantArrayType()) {
+      auto ftype =
+          llvm::dyn_cast<clang::ConstantArrayType>(fieldDecl->getType());
       newField.arraySize = ftype->getSize().getZExtValue();
       newField.type = GetTypeName(ftype->getElementType(), _ASTContext);
       newField.rawType = GetRawTypeName(ftype->getElementType(), _ASTContext);
-    }
-    else
-    {
+    } else {
       newField.arraySize = 0;
       newField.type = GetTypeName(fieldDecl->getType(), _ASTContext);
       newField.rawType = GetRawTypeName(fieldDecl->getType(), _ASTContext);
     }
-    if(fieldDecl->hasInClassInitializer())
-    {
+    if (fieldDecl->hasInClassInitializer()) {
       llvm::raw_string_ostream s(newField.defaultValue);
       auto defArg = fieldDecl->getInClassInitializer();
       defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
     }
     HandleFunctionPointer(fieldDecl, newField);
     if (record) {
-      newField.offset = layout->getFieldOffset(fieldDecl->getFieldIndex()) / 8;
       record->fields.push_back(std::move(newField));
     } else
       LOG("field without record founded.");
@@ -545,13 +524,13 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     newField.access = GetAccessString(varDecl->getAccess());
     newField.comment = comment;
     newField.attrs = attr;
+    newField.isStatic = true;
     newField.name = varDecl->getNameAsString();
     newField.type = GetTypeName(varDecl->getType(), _ASTContext);
     newField.line = location.getLine();
-    newField.offset = 0;
     HandleFunctionPointer(varDecl, newField);
     if (record)
-      record->statics.push_back(std::move(newField));
+      record->fields.push_back(std::move(newField));
     else
       LOG("field without record founded.");
   } break;
