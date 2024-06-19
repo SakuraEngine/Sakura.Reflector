@@ -11,6 +11,7 @@
 #include "meta.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/TimeProfiler.h"
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -40,7 +41,12 @@ public:
 
   std::unique_ptr<clang::ASTConsumer>
   CreateASTConsumer(clang::CompilerInstance &compiler, llvm::StringRef file) {
-    // opts
+    // fronted opts
+    auto &FO = compiler.getFrontendOpts();
+    FO.SkipFunctionBodies = true;
+    FO.ProgramAction = clang::frontend::ParseSyntaxOnly;
+
+    // lang opts
     auto &LO = compiler.getLangOpts();
     LO.CommentOpts.ParseAllComments = true;
 
@@ -72,15 +78,18 @@ int main(int argc, const char **argv) {
   }
   meta::OptionsParser &OptionsParser = ExpectedParser.get();
 
+  // init time trace
+  timeTraceProfilerInitialize(32, llvm::StringRef{args[0]});
+
   // run tool
-  auto start = std::chrono::high_resolution_clock::now();
+  // auto start = std::chrono::high_resolution_clock::now();
   tooling::ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
   int result = Tool.run(tooling::newFrontendActionFactory<ReflectFrontendAction>().get());
-  auto end = std::chrono::high_resolution_clock::now();
-  std::cout << "[" << Root << "]\n"
-            << "Elapsed time: "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-            << "ms\n";
+  // auto end = std::chrono::high_resolution_clock::now();
+  // std::cout << "[" << Root << "]\n"
+  //           << "Elapsed time: "
+  //           << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+  //           << "ms\n";
 
   // serialize
   std::string OutPath;
@@ -103,5 +112,16 @@ int main(int argc, const char **argv) {
     std::ofstream of(MetaPath.str().str());
     of << meta::serialize(pair.second);
   }
+
+  // output time trace
+  {
+    llvm::SmallString<1024> time_trace_path(OutPath);
+    llvm::sys::path::append(time_trace_path, "meta_time.json");
+    std::error_code ec;
+    llvm::raw_fd_stream fs(time_trace_path, ec);
+    llvm::timeTraceProfilerWrite(fs);
+    fs.close();
+  }
+
   return result;
 }
