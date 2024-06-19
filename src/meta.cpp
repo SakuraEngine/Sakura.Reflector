@@ -124,8 +124,6 @@ std::string meta::serialize(const Database &P) {
       });
     }
   });
-
-  serializeAttr(J, P.attrs);
   J.objectEnd();
   return str;
 }

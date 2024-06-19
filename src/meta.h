@@ -92,10 +92,8 @@ struct Database {
   std::vector<Record> records;
   std::vector<Function> functions;
   std::vector<Enum> enums;
-  std::string attrs;
   bool is_empty() {
-    return records.empty() && functions.empty() && enums.empty() &&
-           attrs.empty();
+    return records.empty() && functions.empty() && enums.empty();
   }
 };
 
