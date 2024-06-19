@@ -11,7 +11,9 @@
 #include "meta.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
+#include <chrono>
 #include <fstream>
+#include <iostream>
 #include <memory>
 
 namespace tooling = clang::tooling;
@@ -20,68 +22,84 @@ namespace tooling = clang::tooling;
 static llvm::cl::OptionCategory ToolCategoryOption("meta options");
 static llvm::cl::cat ToolCategory(ToolCategoryOption);
 
-// CommonOptionsParser declares HelpMessage with a description of the common
-// command-line options related to the compilation database and input files.
-// It's nice to have this help message in all tools.
-static llvm::cl::extrahelp
-    CommonHelp(tooling::CommonOptionsParser::HelpMessage);
-
-// A help message for this specific tool can be added afterwards.
-static llvm::cl::extrahelp MoreHelp("\nMore help text...\n");
-
+// command args
 static llvm::cl::opt<std::string> Output(
     "output", llvm::cl::Required,
     llvm::cl::desc("Specify database output directory, depending on extension"),
     ToolCategory, llvm::cl::value_desc("directory"));
-
 static llvm::cl::opt<std::string>
     Root("root", llvm::cl::Required,
          llvm::cl::desc("Specify parse root directory"), ToolCategory,
          llvm::cl::value_desc("directory"));
 
-static meta::FileDataMap datamap;
+// custom action
+static meta::FileDataMap data_map;
 class ReflectFrontendAction : public clang::ASTFrontendAction {
 public:
   ReflectFrontendAction() {}
 
   std::unique_ptr<clang::ASTConsumer>
   CreateASTConsumer(clang::CompilerInstance &compiler, llvm::StringRef file) {
+    // opts
     auto &LO = compiler.getLangOpts();
     LO.CommentOpts.ParseAllComments = true;
-    return std::make_unique<meta::ASTConsumer>(datamap, Root);
+
+    return std::make_unique<meta::ASTConsumer>(data_map, Root);
   }
 };
 
 int main(int argc, const char **argv) {
-  std::vector<const char *> args(argc + 1);
-  args[0] = argv[0];
-  for (int i = 1; i < argc; ++i)
-    args[i + 1] = argv[i];
-  args[1] = "--extra-arg=-D__meta__";
-  argc += 1;
+  // copy args
+  std::vector<const char *> args{};
+  for (int i = 0; i < argc; ++i) {
+    args.push_back(argv[i]);
+  }
+
+  // meta def
+  args.insert(args.begin() + 1, "--extra-arg=-D__meta__");
+  argc = args.size();
+
+  // parse args
   auto ExpectedParser = meta::OptionsParser::create(
-      argc, args.data(), llvm::cl::ZeroOrMore, ToolCategoryOption);
+      argc,
+      args.data(),
+      llvm::cl::ZeroOrMore,
+      ToolCategoryOption);
   if (!ExpectedParser) {
     // Fail gracefully for unsupported options.
     llvm::errs() << ExpectedParser.takeError();
     return 1;
   }
   meta::OptionsParser &OptionsParser = ExpectedParser.get();
-  tooling::ClangTool Tool(OptionsParser.getCompilations(),
-                          OptionsParser.getSourcePathList());
-  int result = Tool.run(
-      tooling::newFrontendActionFactory<ReflectFrontendAction>().get());
+
+  // run tool
+  auto start = std::chrono::high_resolution_clock::now();
+  tooling::ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+  int result = Tool.run(tooling::newFrontendActionFactory<ReflectFrontendAction>().get());
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "[" << Root << "]\n"
+            << "Elapsed time: "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+            << "ms\n";
+
+  // serialize
   std::string OutPath;
   OutPath = Output;
-  for (auto &pair : datamap) {
+  for (auto &pair : data_map) {
     using namespace llvm;
     if (pair.second.is_empty())
       continue;
+
+    // replace extension to .h.meta
     SmallString<1024> MetaPath(OutPath + pair.first);
     sys::path::replace_extension(MetaPath, ".h.meta");
+
+    // create meta dir
     SmallString<1024> MetaDir = MetaPath;
     sys::path::remove_filename(MetaDir);
     llvm::sys::fs::create_directories(MetaDir);
+
+    // write meta file
     std::ofstream of(MetaPath.str().str());
     of << meta::serialize(pair.second);
   }
