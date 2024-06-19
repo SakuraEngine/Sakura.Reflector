@@ -15,6 +15,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Path.h"
+#include <iostream>
 #include <vector>
 
 void meta::ASTConsumer::HandleTranslationUnit(ASTContext &ctx) {
@@ -35,7 +36,7 @@ void meta::ASTConsumer::HandleTranslationUnit(ASTContext &ctx) {
     case (clang::Decl::Function):
     case (clang::Decl::Enum):
     case (clang::Decl::ClassTemplate):
-      HandleDecl(named_decl, newStack, PAR_NoReflect, nullptr, nullptr);
+      HandleDecl(named_decl, newStack, nullptr, nullptr);
       break;
     default:
       break;
@@ -245,8 +246,7 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl *decl,
   field.signature = std::move(pv.function);
 }
 void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
-                                   std::vector<std::string> &attrStack,
-                                   ParseBehavior behavior, Record *record,
+                                   std::vector<std::string> &attrStack, Record *record,
                                    const clang::ASTRecordLayout *layout) {
   if (decl->isInvalidDecl())
     return;
@@ -285,16 +285,11 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     if (auto inner = templateDecl->getTemplatedDecl())
       attrDecl = inner;
   }
-  ParseBehavior childBehavior =
-      behavior == PAR_Normal ? PAR_NoReflect : behavior;
+  bool has_reflect_entry = false;
   for (auto annotate : attrDecl->specific_attrs<clang::AnnotateAttr>()) {
     auto text = annotate->getAnnotation();
-    if (text.equals("__noreflect__"))
-      return;
     if (text.equals("__reflect__"))
-      behavior = childBehavior = PAR_Normal;
-    else if (text.equals("__full_reflect__"))
-      behavior = childBehavior = PAR_Reflect;
+      has_reflect_entry = true;
     else if (text.startswith("__push__")) {
       auto pushText = text.substr(sizeof("__push__") - 1);
       attrStack.push_back(pushText.str());
@@ -303,18 +298,39 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     else
       Join(attr, text.str());
   }
-  if (behavior == PAR_NoReflect)
-    return;
 
+  // filter reflect flag
   switch (kind) {
-  case (clang::Decl::Namespace):
   case (clang::Decl::CXXRecord):
-  case (clang::Decl::ClassTemplate):
-    if (childBehavior == PAR_NoReflect)
+  case (clang::Decl::Enum):
+    if (!has_reflect_entry) {
       return;
+    }
+    break;
+  case (clang::Decl::ClassTemplate):
+  case (clang::Decl::ClassTemplateSpecialization):
+  case (clang::Decl::FunctionTemplate):
+    return;
   default:
     break;
   }
+
+  // FIXME. debug output
+  // switch (kind) {
+  // case (clang::Decl::CXXRecord):
+  // case (clang::Decl::Enum):
+  // case (clang::Decl::Namespace):
+  // case (clang::Decl::Field):
+  // case (clang::Decl::CXXMethod):
+  // case (clang::Decl::Function):
+  // case (clang::Decl::CXXConstructor):
+  // case (clang::Decl::CXXDestructor):
+  //   break;
+  // default:
+  //   decl->printName(llvm::outs());
+  //   llvm::outs() << "\n";
+  // }
+
   for (auto &pattr : attrStack) {
     if (!attr.empty())
       attr += ", ";
@@ -331,7 +347,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
          i != declContext->decls_end(); ++i) {
       clang::NamedDecl *named_decl = llvm::dyn_cast<clang::NamedDecl>(*i);
       if (named_decl)
-        HandleDecl(named_decl, newStack, behavior, nullptr, nullptr);
+        HandleDecl(named_decl, newStack, nullptr, nullptr);
     }
     return;
   } break;
@@ -378,7 +394,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
       clang::NamedDecl *namedDecl = llvm::dyn_cast<clang::NamedDecl>(*i);
       if (!namedDecl)
         continue;
-      HandleDecl(namedDecl, newStack, childBehavior, &newRecord,
+      HandleDecl(namedDecl, newStack, &newRecord,
                  &_ASTContext->getASTRecordLayout(recordDecl));
     }
 

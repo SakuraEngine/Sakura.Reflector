@@ -1,6 +1,7 @@
 add_rules("mode.debug", "mode.release")
 
 set_languages("c11", "cxx17")
+set_policy("build.ccache", false)
 
 if (is_os("windows")) then 
 

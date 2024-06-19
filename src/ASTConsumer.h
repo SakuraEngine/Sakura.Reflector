@@ -13,7 +13,6 @@
 namespace meta {
 using namespace clang;
 
-enum ParseBehavior { PAR_Normal, PAR_Reflect, PAR_NoReflect };
 class ASTConsumer : public clang::ASTConsumer {
 public:
   ASTConsumer(FileDataMap &datamap, std::string root)
@@ -21,15 +20,14 @@ public:
   void HandleTranslationUnit(ASTContext &ctx) override;
   ASTContext *GetContext() { return _ASTContext; }
 
+  // helper functions
   void HandleFunctionPointer(clang::DeclaratorDecl *decl, meta::Field &field);
+  void HandleDecl(clang::NamedDecl *decl, std::vector<std::string> &attrStack, Record *record, const clang::ASTRecordLayout *layout);
 
 protected:
   FileDataMap &datamap;
   std::string root;
   std::unordered_set<meta::Identity, meta::IdentityHash> parsed;
   ASTContext *_ASTContext;
-  void HandleDecl(clang::NamedDecl *decl, std::vector<std::string> &attrStack,
-                  ParseBehavior behavior, Record *record,
-                  const clang::ASTRecordLayout *layout);
 };
 } // namespace meta
