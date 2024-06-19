@@ -268,16 +268,24 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
           llvm::sys::path::convert_to_slash(AbsolutePath.str());
       root = llvm::sys::path::convert_to_slash(root);
       fileName = calculateRelativeFilePath(root, fileName).str().str();
-      if (fileName.empty())
+      if (fileName.empty()) {
+        // llvm::outs() << "[No Filename]";
+        // decl->printName(llvm::outs());
+        // llvm::outs() << "\n";
         return;
+      }
       ident.fileName = absPath;
       ident.line = location.getLine();
     } else {
+      // llvm::outs() << "[No Location]";
+      // decl->printName(llvm::outs());
+      // llvm::outs() << "\n";
       return;
     }
     auto iter = parsed.find(ident);
-    if (iter != parsed.end())
+    if (iter != parsed.end() && kind != clang::Decl::Namespace) {
       return;
+    }
     parsed.insert(ident);
   }
   auto &db = datamap[fileName];
@@ -346,8 +354,9 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl,
     for (clang::DeclContext::decl_iterator i = declContext->decls_begin();
          i != declContext->decls_end(); ++i) {
       clang::NamedDecl *named_decl = llvm::dyn_cast<clang::NamedDecl>(*i);
-      if (named_decl)
+      if (named_decl) {
         HandleDecl(named_decl, newStack, nullptr, nullptr);
+      }
     }
     return;
   } break;
