@@ -17,11 +17,11 @@ struct Function {
   bool isNothrow;
   std::string name;
   std::string attrs;
-  std::string comment;
   std::vector<struct Field> parameters;
   std::string retType;
   std::string rawRetType;
   std::string access = "none";
+  std::string comment;
   std::string fileName;
   int line;
 };
@@ -76,7 +76,7 @@ struct Enum {
 
 struct Identity {
   std::string fileName;
-  int line;
+  unsigned line;
   bool operator==(const Identity &other) const {
     return fileName == other.fileName && line == other.line;
   }

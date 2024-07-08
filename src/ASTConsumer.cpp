@@ -57,8 +57,7 @@ std::string get_access_string(clang::AccessSpecifier access) {
     return "none";
   }
 }
-std::string get_comment(clang::Decl *decl, clang::ASTContext *ctx,
-                        clang::SourceManager &sm) {
+std::string get_comment(clang::Decl *decl, clang::ASTContext *ctx, clang::SourceManager &sm) {
   using namespace clang;
   std::string comment;
   const RawComment *rc = ctx->getRawCommentForDeclNoCache(decl);
@@ -72,10 +71,10 @@ std::string get_comment(clang::Decl *decl, clang::ASTContext *ctx,
   }
   return comment;
 }
-llvm::SmallString<64> relative_path(const llvm::StringRef &root, const llvm::StringRef &path) {
+std::string relative_path(const llvm::StringRef &root, const llvm::StringRef &path) {
   if (!path.startswith(root))
     return {};
-  return path.substr(root.size());
+  return path.substr(root.size()).str();
 }
 std::string parse_attr(clang::NamedDecl *decl) {
   std::string attr;
@@ -87,451 +86,824 @@ std::string parse_attr(clang::NamedDecl *decl) {
   }
   return attr;
 };
-}; // namespace help
-
-void meta::ASTConsumer::HandleTranslationUnit(ASTContext &ctx) {
-  _transition_unit_ctx = &ctx;
-  auto tuDecl = ctx.getTranslationUnitDecl();
-  for (clang::DeclContext::decl_iterator i = tuDecl->decls_begin();
-       i != tuDecl->decls_end(); ++i) {
-    clang::NamedDecl *named_decl = llvm::dyn_cast<clang::NamedDecl>(*i);
-    if (named_decl == 0)
-      continue;
-
-    // Filter out unsupported decls at the global namespace level
-    clang::Decl::Kind kind = named_decl->getKind();
-    switch (kind) {
-    case (clang::Decl::Namespace):
-    case (clang::Decl::CXXRecord):
-    case (clang::Decl::Function):
-    case (clang::Decl::Enum):
-    case (clang::Decl::ClassTemplate):
-      HandleDecl(named_decl, nullptr, nullptr);
-      break;
-    default:
-      break;
-    }
+bool has_reflect_flag(clang::NamedDecl *decl) {
+  for (auto annotate : decl->specific_attrs<clang::AnnotateAttr>()) {
+    auto text = annotate->getAnnotation();
+    if (text.equals("__reflect__"))
+      return true;
+  }
+  return false;
+}
+std::string get_decl_file_name(clang::Decl *decl, const clang::PresumedLoc &location) {
+  using namespace clang;
+  if (location.isValid()) {
+    SmallString<2048> AbsolutePath(tooling::getAbsolutePath(location.getFilename()));
+    llvm::sys::path::remove_dots(AbsolutePath, true);
+    return llvm::sys::path::convert_to_slash(AbsolutePath.str());
+  } else {
+    return "";
   }
 }
+} // namespace help
 
 class ParmVisitor : public clang::RecursiveASTVisitor<ParmVisitor> {
 public:
-  bool VisitParmVarDecl(clang::ParmVarDecl *param) {
-    if (param == decl) {
+  bool VisitParmVarDecl(clang::ParmVarDecl *param_decl) {
+    // root decl is a parameter, we visit child depth
+    if (param_decl == root_decl) {
       // initialize depth by the current depth
-      depth = param->getFunctionScopeDepth() + 1;
+      depth = param_decl->getFunctionScopeDepth() + 1;
       return true;
     }
+
     // only visit parameters in the same scope
-    if (param->getFunctionScopeDepth() != depth)
+    if (param_decl->getFunctionScopeDepth() != depth)
       return true;
-    meta::Field newField;
-    auto &sm = consumer->transition_unit_ctx()->getSourceManager();
-    auto location = sm.getPresumedLoc(param->getLocation());
-    newField.access = help::get_access_string(clang::AS_none);
-    newField.arraySize = 0;
-    newField.comment = help::get_comment(param, consumer->transition_unit_ctx(), sm);
-    newField.attrs = help::parse_attr(param);
-    newField.name = param->getNameAsString();
-    // no default value for function pointer
-    newField.defaultValue = "";
-    if (newField.name.empty()) {
-      newField.name =
-          "unnamed" + std::to_string(param->getFunctionScopeIndex());
-      newField.isAnonymous = true;
+
+    meta::Field param_data;
+
+    // comment & location
+    param_data.comment = help::get_comment(param_decl, consumer->transition_unit_ctx(), consumer->transition_unit_ctx()->getSourceManager());
+    param_data.line = consumer->transition_unit_ctx()->getSourceManager().getPresumedLineNumber(param_decl->getLocation());
+
+    // parse parameter data
+    param_data.name = param_decl->getNameAsString();
+    if (param_data.name.empty()) {
+      param_data.name = "unnamed" + std::to_string(param_decl->getFunctionScopeIndex());
+      param_data.isAnonymous = true;
     }
-    if (param->getType()->isConstantArrayType()) {
-      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
-      newField.arraySize = ftype->getSize().getZExtValue();
-      newField.type = help::get_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
-      newField.rawType = help::get_raw_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
+    param_data.attrs = help::parse_attr(param_decl);
+
+    // parse array data
+    if (param_decl->getType()->isConstantArrayType()) {
+      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param_decl->getType());
+      param_data.arraySize = ftype->getSize().getZExtValue();
+      param_data.type = help::get_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
+      param_data.rawType = help::get_raw_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
     } else {
-      newField.arraySize = 0;
-      newField.type = help::get_type_name(param->getType(), consumer->transition_unit_ctx());
-      newField.rawType = help::get_raw_type_name(param->getType(), consumer->transition_unit_ctx());
+      param_data.arraySize = 0;
+      param_data.type = help::get_type_name(param_decl->getType(), consumer->transition_unit_ctx());
+      param_data.rawType = help::get_raw_type_name(param_decl->getType(), consumer->transition_unit_ctx());
     }
-    newField.line = location.getLine();
-    consumer->HandleFunctionPointer(param, newField);
-    function.parameters.push_back(std::move(newField));
+
+    // recursive handle function pointer
+    consumer->_fill_function_pointer(param_decl, param_data);
+
+    // parameter unused data
+    param_data.access = help::get_access_string(clang::AS_none);
+    param_data.arraySize = 0;
+    param_data.defaultValue = "";
+
+    // add parameter
+    parameters.emplace_back(std::move(param_data));
     return true;
   }
 
-  int depth;
-  meta::Function function;
-  meta::ASTConsumer *consumer;
-  clang::Decl *decl;
+  // input
+  meta::ASTConsumer *consumer; // 用于获取 transition unit 和 递归调用
+  clang::Decl *root_decl;      // 根部的 decl, 用于避免重复访问根节点（作为函数参数时）
+
+  std::vector<meta::Field> parameters; // 填充的参数列表
+  int depth = 0;
 };
 
-void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl *decl,
-                                              meta::Field &field) {
-  clang::Decl *trueDecl = decl;
-  field.isFunctor = false;
-  field.isCallback = false;
-  clang::QualType Ty = decl->getType();
-  const clang::TypedefType *TDT = Ty->getAs<TypedefType>();
-  if (TDT) {
-    trueDecl = TDT->getDecl();
-    Ty = TDT->getDecl()->getUnderlyingType();
-  }
-  bool isFunctor = false;
-  if (auto TST = Ty->getAs<clang::TemplateSpecializationType>()) {
-    auto Arguments = TST->template_arguments();
-    if (Arguments.size() != 0) {
-      // is first arg a function pointer?
-      if (Arguments[0].getKind() != clang::TemplateArgument::Type)
-        return;
-      Ty = Arguments[0].getAsType();
-      isFunctor = true;
+namespace meta {
+ASTConsumer::ASTConsumer(FileDataMap &datamap, std::string root)
+    : _datamap(datamap) {
+  _root = llvm::sys::path::convert_to_slash(root);
+}
+
+// override
+void ASTConsumer::HandleTranslationUnit(ASTContext &ctx) {
+  // cache transition unit ctx
+  _transition_unit_ctx = &ctx;
+
+  // each translation unit decl
+  auto transition_unit_decl = ctx.getTranslationUnitDecl();
+  for (auto decl_it = transition_unit_decl->decls_begin(); decl_it != transition_unit_decl->decls_end(); ++decl_it) {
+    clang::NamedDecl *child_decl = llvm::dyn_cast<clang::NamedDecl>(*decl_it);
+    if (child_decl) {
+      switch (child_decl->getKind()) {
+      case (clang::Decl::Namespace):
+        handle_namespace(child_decl);
+        break;
+      case (clang::Decl::CXXRecord):
+        handle_record(child_decl);
+        break;
+      case (clang::Decl::Function):
+        handle_function(child_decl);
+        break;
+      case (clang::Decl::Enum):
+        handle_enum(child_decl);
+        break;
+      case (clang::Decl::ClassTemplate):
+        handle_template(child_decl);
+        break;
+      default:
+        break;
+      }
     }
   }
-  TDT = Ty->getAs<TypedefType>();
-  if (TDT) {
-    trueDecl = TDT->getDecl();
-    Ty = TDT->getDecl()->getUnderlyingType();
-  }
-  if (Ty->isFunctionPointerType())
-    Ty = Ty->castAs<PointerType>()->getPointeeType();
-  else if (Ty->isFunctionReferenceType())
-    Ty = Ty->castAs<ReferenceType>()->getPointeeType();
-  else if (Ty->isConstantArrayType())
-    Ty = Ty->getAsArrayTypeUnsafe()->getElementType();
-  auto type = Ty->getAs<clang::FunctionType>();
-  if (!type)
-    return;
-  ParmVisitor pv;
-  pv.consumer = this;
-  pv.decl = trueDecl;
-  pv.TraverseDecl(trueDecl);
-
-  auto &sm = transition_unit_ctx()->getSourceManager();
-  auto location = sm.getPresumedLoc(trueDecl->getLocation());
-  pv.function.attrs = field.attrs;
-  pv.function.name = field.name;
-  pv.function.access = help::get_access_string(AS_none);
-  SmallString<1024> AbsolutePath(tooling::getAbsolutePath(location.getFilename()));
-  llvm::sys::path::remove_dots(AbsolutePath, true);
-  pv.function.fileName = llvm::sys::path::convert_to_slash(AbsolutePath.str());
-  pv.function.isStatic = true;
-  auto proto = type->getAs<clang::FunctionProtoType>();
-  pv.function.isNothrow = proto ? proto->isNothrow() : false;
-  pv.function.isConst = false;
-  pv.function.line = location.getLine();
-  pv.function.comment = help::get_comment(trueDecl, transition_unit_ctx(), sm);
-  pv.function.retType = help::get_type_name(type->getReturnType(), transition_unit_ctx());
-  pv.function.rawRetType = help::get_raw_type_name(type->getReturnType(), transition_unit_ctx());
-  field.isFunctor = isFunctor;
-  field.isCallback = true;
-  field.signature = std::move(pv.function);
 }
-void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, Record *record, const clang::ASTRecordLayout *layout) {
+
+// root level parse functions
+void ASTConsumer::handle_namespace(clang::NamedDecl *decl) {
+  // filter invalid decl
   if (decl->isInvalidDecl())
     return;
-  clang::Decl::Kind kind = decl->getKind();
-  std::string attr;
-  clang::NamedDecl *attrDecl = decl;
-  std::string fileName;
-  std::string absPath;
-  {
-    Identity ident;
-    auto location = _transition_unit_ctx->getSourceManager().getPresumedLoc(decl->getLocation());
 
-    if (!location.isInvalid()) {
-      SmallString<1024> AbsolutePath(
-          tooling::getAbsolutePath(location.getFilename()));
-      llvm::sys::path::remove_dots(AbsolutePath, true);
-      fileName = absPath =
-          llvm::sys::path::convert_to_slash(AbsolutePath.str());
-      root = llvm::sys::path::convert_to_slash(root);
-      fileName = help::relative_path(root, fileName).str().str();
-      if (fileName.empty()) {
-        // llvm::outs() << "[No Filename]";
-        // decl->printName(llvm::outs());
-        // llvm::outs() << "\n";
-        return;
+  // each child decl
+  clang::DeclContext *decl_ctx = decl->castToDeclContext(decl);
+  for (auto decl_it = decl_ctx->decls_begin(); decl_it != decl_ctx->decls_end(); ++decl_it) {
+    clang::NamedDecl *child_decl = llvm::dyn_cast<clang::NamedDecl>(*decl_it);
+    if (child_decl) {
+      switch (child_decl->getKind()) {
+      case (clang::Decl::Namespace):
+        handle_namespace(child_decl);
+        break;
+      case (clang::Decl::CXXRecord):
+        handle_record(child_decl);
+        break;
+      case (clang::Decl::Function):
+        handle_function(child_decl);
+        break;
+      case (clang::Decl::Enum):
+        handle_enum(child_decl);
+        break;
+      case (clang::Decl::ClassTemplate):
+        handle_template(child_decl);
+        break;
+      default:
+        break;
       }
-      ident.fileName = absPath;
-      ident.line = location.getLine();
-    } else {
-      // llvm::outs() << "[No Location]";
-      // decl->printName(llvm::outs());
-      // llvm::outs() << "\n";
-      return;
     }
-    auto iter = parsed.find(ident);
-    if (iter != parsed.end() && kind != clang::Decl::Namespace) {
-      return;
-    }
-    parsed.insert(ident);
   }
-  auto &db = datamap[fileName];
-  if (auto templateDecl = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
-    if (auto inner = templateDecl->getTemplatedDecl())
-      attrDecl = inner;
+}
+void ASTConsumer::handle_record(clang::NamedDecl *decl) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
   }
 
-  // check reflect entry
-  bool has_reflect_entry = false;
-  for (auto annotate : attrDecl->specific_attrs<clang::AnnotateAttr>()) {
-    auto text = annotate->getAnnotation();
-    if (text.equals("__reflect__"))
-      has_reflect_entry = true;
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
   }
-
-  // parse attr
-  attr = help::parse_attr(attrDecl);
 
   // filter reflect flag
-  switch (kind) {
+  if (!_filter_reflect_flag(decl)) {
+    return;
+  }
+
+  // get file data base
+  auto &db = _get_file_db(rel_file_name);
+
+  // filter record
+  clang::CXXRecordDecl *record_decl = llvm::dyn_cast<clang::CXXRecordDecl>(decl);
+  if (!record_decl) {
+    return;
+  }
+
+  // filter forward declaration
+  if (record_decl->isThisDeclarationADefinition() == clang::VarDecl::DeclarationOnly) {
+    // ignore forward declaration attributes
+    // LOG("attribute on forward declaration is ignored.");
+    return;
+  }
+
+  // filter nested record
+  {
+    clang::DeclContext *parent = record_decl->getDeclContext();
+    while (parent) {
+      if (auto parentRecord = llvm::dyn_cast<clang::CXXRecordDecl>(parent)) {
+        return;
+      }
+      parent = parent->getParent();
+    }
+  }
+
+  // filter anonymous record
+  if (record_decl->isAnonymousStructOrUnion()) {
+    // LOG("attribute on anonymous record is ignored.");
+    return;
+  }
+
+  // filter union
+  if (record_decl->isUnion()) {
+    // LOG("union is not fully supported, use at your own risk.");
+    return;
+  }
+
+  Record record_data = {};
+
+  // parse comment & location
+  record_data.comment = help::get_comment(record_decl, _transition_unit_ctx, source_manager);
+  record_data.fileName = abs_file_name;
+  record_data.line = line;
+
+  // parse record data
+  record_data.name = record_decl->getQualifiedNameAsString();
+  record_data.attrs = help::parse_attr(record_decl);
+  for (auto base : record_decl->bases()) {
+    record_data.bases.push_back(help::get_type_name(base.getType(), _transition_unit_ctx));
+    // TODO. base info
+    base.isVirtual();
+    base.getAccessSpecifier();
+  }
+
+  // dispatch child decl
+  for (auto child_decl : decl->castToDeclContext(decl)->decls()) {
+    auto named_child_decl = llvm::dyn_cast<clang::NamedDecl>(child_decl);
+    if (named_child_decl) {
+      switch (named_child_decl->getKind()) {
+      case (clang::Decl::Field):
+        handle_field(named_child_decl, record_data.fields.emplace_back());
+        break;
+      case (clang::Decl::Var):
+        handle_static_field(named_child_decl, record_data.fields.emplace_back());
+        break;
+      case (clang::Decl::CXXMethod):
+        handle_method(named_child_decl, record_data.methods.emplace_back());
+        break;
+      case (clang::Decl::Function):
+        handle_static_method(named_child_decl, record_data.methods.emplace_back());
+        break;
+      case (clang::Decl::Record):
+        // nested record is not supported now
+        break;
+      default:
+        break;
+      }
+    }
+  }
+
+  // push record
+  _get_file_db(rel_file_name).records.emplace_back(std::move(record_data));
+}
+void ASTConsumer::handle_enum(clang::NamedDecl *decl) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
+  }
+
+  // filter reflect flag
+  if (!_filter_reflect_flag(decl)) {
+    return;
+  }
+
+  // filter enum
+  clang::EnumDecl *enum_decl = llvm::dyn_cast<clang::EnumDecl>(decl);
+  if (!enum_decl) {
+    return;
+  }
+
+  Enum enum_data;
+
+  // parse comment & location
+  enum_data.comment = help::get_comment(enum_decl, _transition_unit_ctx, source_manager);
+  enum_data.fileName = abs_file_name;
+  enum_data.line = line;
+
+  // parse enum data
+  enum_data.name = enum_decl->getQualifiedNameAsString();
+  enum_data.isScoped = enum_decl->isScoped();
+  enum_data.underlying_type = enum_decl->isFixed()
+                                  ? enum_decl->getIntegerType().getAsString(_transition_unit_ctx->getLangOpts())
+                                  : "unfixed";
+  enum_data.attrs = help::parse_attr(enum_decl);
+
+  // parse enum item
+  for (auto enumerator : enum_decl->enumerators()) {
+    Enumerator enumerator_data;
+    // parse comment & location
+    enumerator_data.comment = help::get_comment(enumerator, _transition_unit_ctx, source_manager);
+    enumerator_data.line = source_manager.getPresumedLineNumber(enumerator->getLocation());
+
+    // parse enum item data
+    enumerator_data.name = enumerator->getQualifiedNameAsString();
+    enumerator_data.value = enumerator->getInitVal().getRawData()[0];
+    enumerator_data.attrs = help::parse_attr(enumerator);
+
+    // push enum item
+    enum_data.values.push_back(std::move(enumerator_data));
+  }
+
+  // push enum
+  _get_file_db(rel_file_name).enums.push_back(std::move(enum_data));
+}
+void ASTConsumer::handle_function(clang::NamedDecl *decl) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
+  }
+
+  // filter reflect flag
+  if (!_filter_reflect_flag(decl)) {
+    return;
+  }
+
+  // filter function
+  clang::FunctionDecl *func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl);
+  if (!func_decl) {
+    return;
+  }
+
+  Function func_data;
+
+  // comment & location
+  func_data.comment = help::get_comment(func_decl, _transition_unit_ctx, source_manager);
+  func_data.fileName = abs_file_name;
+  func_data.line = line;
+
+  // parse function data
+  _fill_function_data(func_decl, func_data);
+
+  // unused function data
+  func_data.access = help::get_access_string(func_decl->getAccess());
+  func_data.isConst = false;
+
+  // push function
+  _get_file_db(rel_file_name).functions.push_back(std::move(func_data));
+}
+void ASTConsumer::handle_template(clang::NamedDecl *decl) {
+  // unsupported now
+  return;
+
+  // get template decl
+  CXXRecordDecl *template_decl = nullptr;
+  if (auto templateDecl = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
+    if (auto inner = templateDecl->getTemplatedDecl())
+      template_decl = inner;
+  }
+}
+
+// leaf level parse functions
+void ASTConsumer::handle_method(clang::NamedDecl *decl, Function &out_method) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
+  }
+
+  // filter method
+  clang::CXXMethodDecl *method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(decl);
+  if (!method_decl) {
+    return;
+  }
+
+  // comment & location
+  out_method.comment = help::get_comment(method_decl, _transition_unit_ctx, source_manager);
+  out_method.fileName = abs_file_name;
+  out_method.line = line;
+
+  // parse method data
+  _fill_function_data(method_decl, out_method);
+
+  // access & const
+  out_method.access = help::get_access_string(method_decl->getAccess());
+  out_method.isConst = method_decl->isConst();
+}
+void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_method) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
+  }
+
+  // filter static method
+  clang::FunctionDecl *func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl);
+  if (!func_decl) {
+    return;
+  }
+
+  // comment & location
+  out_method.comment = help::get_comment(func_decl, _transition_unit_ctx, source_manager);
+  out_method.fileName = abs_file_name;
+  out_method.line = line;
+
+  // parse function data
+  _fill_function_data(func_decl, out_method);
+
+  // access & const
+  out_method.access = help::get_access_string(func_decl->getAccess());
+  out_method.isConst = false;
+}
+void ASTConsumer::handle_field(clang::NamedDecl *decl, Field &out_field) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
+  }
+
+  // filter field
+  clang::FieldDecl *field_decl = llvm::dyn_cast<clang::FieldDecl>(decl);
+  if (!field_decl) {
+    return;
+  }
+
+  // comment & location
+  out_field.comment = help::get_comment(field_decl, _transition_unit_ctx, source_manager);
+  out_field.line = line;
+
+  // parse field data
+  out_field.name = field_decl->getNameAsString();
+  out_field.attrs = help::parse_attr(field_decl);
+  out_field.access = help::get_access_string(field_decl->getAccess());
+  out_field.isStatic = false;
+
+  // parse array data
+  if (field_decl->getType()->isConstantArrayType()) {
+    auto ftype =
+        llvm::dyn_cast<clang::ConstantArrayType>(field_decl->getType());
+    out_field.arraySize = ftype->getSize().getZExtValue();
+    out_field.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
+    out_field.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+  } else {
+    out_field.arraySize = 0;
+    out_field.type = help::get_type_name(field_decl->getType(), _transition_unit_ctx);
+    out_field.rawType = help::get_raw_type_name(field_decl->getType(), _transition_unit_ctx);
+  }
+
+  // default value
+  if (field_decl->hasInClassInitializer()) {
+    llvm::raw_string_ostream s(out_field.defaultValue);
+    auto defArg = field_decl->getInClassInitializer();
+    defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
+  }
+
+  // handle if field is function pointer
+  _fill_function_pointer(field_decl, out_field);
+}
+void ASTConsumer::handle_static_field(clang::NamedDecl *decl, Field &out_field) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return;
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return;
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return;
+  }
+
+  // filter static field
+  clang::VarDecl *var_decl = llvm::dyn_cast<clang::VarDecl>(decl);
+  if (!var_decl || !var_decl->isStaticDataMember()) {
+    return;
+  }
+
+  // comment & location
+  out_field.comment = help::get_comment(var_decl, _transition_unit_ctx, source_manager);
+  out_field.line = line;
+
+  // field data
+  out_field.name = var_decl->getNameAsString();
+  out_field.attrs = help::parse_attr(var_decl);
+  out_field.access = help::get_access_string(var_decl->getAccess());
+  out_field.isStatic = true;
+
+  // parse array data
+  if (var_decl->getType()->isConstantArrayType()) {
+    auto ftype =
+        llvm::dyn_cast<clang::ConstantArrayType>(var_decl->getType());
+    out_field.arraySize = ftype->getSize().getZExtValue();
+    out_field.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
+    out_field.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+  } else {
+    out_field.arraySize = 0;
+    out_field.type = help::get_type_name(var_decl->getType(), _transition_unit_ctx);
+    out_field.rawType = help::get_raw_type_name(var_decl->getType(), _transition_unit_ctx);
+  }
+
+  // handle if field is function pointer
+  _fill_function_pointer(var_decl, out_field);
+}
+
+// helper functions
+bool ASTConsumer::_filter_decl_location(clang::NamedDecl *decl,
+                                        const clang::PresumedLoc &location,
+                                        std::string &out_abs_file_name,
+                                        std::string &out_rel_file_name,
+                                        unsigned &out_line) {
+  // filter location
+  if (location.isInvalid()) {
+    // llvm::outs() << "[No Location]";
+    // decl->printName(llvm::outs());
+    // llvm::outs() << "\n";
+    return false;
+  }
+
+  // location info
+  out_abs_file_name = help::get_decl_file_name(decl, location);
+  out_rel_file_name = help::relative_path(_root, out_abs_file_name);
+  out_line = location.getLine();
+
+  // filter files not under root
+  if (out_rel_file_name.empty()) {
+    // llvm::outs() << "[No Filename]";
+    // decl->printName(llvm::outs());
+    // llvm::outs() << "\n";
+    return false;
+  }
+  return true;
+}
+bool ASTConsumer::_filter_parsed_identity(clang::NamedDecl *decl, const std::string &file_name, unsigned line) {
+  Identity ident;
+  ident.fileName = file_name;
+  ident.line = line;
+  bool is_parsed = _parsed.find(ident) != _parsed.end();
+  if (is_parsed && decl->getKind() != clang::Decl::Namespace) {
+    return false;
+  }
+  _parsed.insert(ident);
+  return true;
+}
+bool ASTConsumer::_filter_reflect_flag(clang::NamedDecl *decl) {
+  bool has_reflect_entry = help::has_reflect_flag(decl);
+  switch (decl->getKind()) {
   case (clang::Decl::CXXRecord):
-  case (clang::Decl::Enum):
+  case (clang::Decl::Enum): // need reflect flag
     if (!has_reflect_entry) {
-      return;
+      return false;
     }
     break;
   case (clang::Decl::ClassTemplate):
   case (clang::Decl::ClassTemplateSpecialization):
-  case (clang::Decl::FunctionTemplate):
-    return;
-  default:
+  case (clang::Decl::FunctionTemplate): // current unsupported
+    return false;
+  default: // 其它情况不影响性能，可以不做过滤
     break;
   }
+  return true;
+}
+Database &ASTConsumer::_get_file_db(const std::string &rel_file_name) {
+  return _datamap[rel_file_name];
+}
+void ASTConsumer::_fill_function_data(clang::FunctionDecl *func_decl, Function &out_func_data) {
+  // parse function data
+  out_func_data.name = func_decl->getQualifiedNameAsString();
+  out_func_data.isStatic = func_decl->isStatic();
+  auto func_proto_type = func_decl->getType()->getAs<clang::FunctionProtoType>();
+  out_func_data.isNothrow = func_proto_type ? func_proto_type->isNothrow() : false;
+  out_func_data.attrs = help::parse_attr(func_decl);
+  if (!func_decl->isNoReturn()) {
+    out_func_data.retType = help::get_type_name(func_decl->getReturnType(), _transition_unit_ctx);
+    out_func_data.rawRetType = help::get_raw_type_name(func_decl->getReturnType(), _transition_unit_ctx);
+  }
 
-  // FIXME. debug output
-  // switch (kind) {
-  // case (clang::Decl::CXXRecord):
-  // case (clang::Decl::Enum):
-  // case (clang::Decl::Namespace):
-  // case (clang::Decl::Field):
-  // case (clang::Decl::CXXMethod):
-  // case (clang::Decl::Function):
-  // case (clang::Decl::CXXConstructor):
-  // case (clang::Decl::CXXDestructor):
-  //   break;
-  // default:
-  //   decl->printName(llvm::outs());
-  //   llvm::outs() << "\n";
-  // }
+  // parse parameters
+  for (auto param : func_decl->parameters()) {
+    Field param_data;
 
-  auto &sm = _transition_unit_ctx->getSourceManager();
-  auto location = sm.getPresumedLoc(decl->getLocation());
-  auto comment = help::get_comment(decl, _transition_unit_ctx, sm);
-  switch (kind) {
-  case (clang::Decl::Namespace): {
-    clang::DeclContext *declContext = decl->castToDeclContext(decl);
-    for (clang::DeclContext::decl_iterator i = declContext->decls_begin();
-         i != declContext->decls_end(); ++i) {
-      clang::NamedDecl *named_decl = llvm::dyn_cast<clang::NamedDecl>(*i);
-      if (named_decl) {
-        HandleDecl(named_decl, nullptr, nullptr);
-      }
-    }
-    return;
-  } break;
-  case (clang::Decl::CXXRecord): {
-    clang::CXXRecordDecl *recordDecl =
-        llvm::dyn_cast<clang::CXXRecordDecl>(decl);
-    if (!recordDecl || recordDecl->isThisDeclarationADefinition() ==
-                           clang::VarDecl::DeclarationOnly) {
-      LOG("attribute on forward declaration is ignored.");
-      return;
-    }
-    Record newRecord;
-    newRecord.comment = comment;
-    // check if the record is nested in other record
-    {
-      clang::DeclContext *parent = recordDecl->getDeclContext();
-      while (parent) {
-        if (auto parentRecord = llvm::dyn_cast<clang::CXXRecordDecl>(parent)) {
-          newRecord.isNested = true;
-          break;
-        }
-        parent = parent->getParent();
-      }
-    }
-    if (!recordDecl->isAnonymousStructOrUnion()) {
-      newRecord.name = recordDecl->getQualifiedNameAsString();
-      newRecord.fileName = absPath;
-      newRecord.line = location.getLine();
-      newRecord.attrs = attr;
-      for (auto base : recordDecl->bases()) {
-        newRecord.bases.push_back(help::get_type_name(base.getType(), _transition_unit_ctx));
-        // TODO. base info
-        base.isVirtual();
-        base.getAccessSpecifier();
-      }
-      record = &newRecord;
-    } else if (!attr.empty()) {
-      LOG("attribute on anonymous record is ignored.");
-    }
-    if (recordDecl->isUnion()) {
-      LOG("union is not fully supported, use at your own risk.");
-    }
+    // comment & location
+    param_data.comment = help::get_comment(param, _transition_unit_ctx, _transition_unit_ctx->getSourceManager());
+    param_data.line = _transition_unit_ctx->getSourceManager().getPresumedLineNumber(param->getLocation());
 
-    clang::DeclContext *declContext = decl->castToDeclContext(decl);
-    for (clang::DeclContext::decl_iterator i = declContext->decls_begin();
-         i != declContext->decls_end(); ++i) {
-      clang::NamedDecl *namedDecl = llvm::dyn_cast<clang::NamedDecl>(*i);
-      if (!namedDecl)
-        continue;
-      HandleDecl(namedDecl, &newRecord, &_transition_unit_ctx->getASTRecordLayout(recordDecl));
+    // parse parameter data
+    param_data.name = param->getNameAsString();
+    if (param_data.name.empty()) {
+      param_data.name = "unnamed" + std::to_string(out_func_data.parameters.size());
+      param_data.isAnonymous = true;
     }
+    param_data.attrs = help::parse_attr(param);
 
-    if (!recordDecl->isAnonymousStructOrUnion()) {
-      db.records.push_back(std::move(newRecord));
-    }
-  } break;
-  case (clang::Decl::Enum): {
-    clang::EnumDecl *enumDecl = llvm::dyn_cast<clang::EnumDecl>(decl);
-    if (!enumDecl)
-      return;
-    Enum newEnum;
-    newEnum.comment = comment;
-    newEnum.name = enumDecl->getQualifiedNameAsString();
-    newEnum.isScoped = enumDecl->isScoped();
-    newEnum.fileName = absPath;
-    newEnum.line = location.getLine();
-    newEnum.attrs = attr;
-    newEnum.underlying_type =
-        enumDecl->isFixed()
-            ? enumDecl->getIntegerType().getAsString(_transition_unit_ctx->getLangOpts())
-            : "unfixed";
-    std::vector<std::string> newStack;
-    for (auto enumerator : enumDecl->enumerators()) {
-      Enumerator newEnumerator;
-      newEnumerator.comment = help::get_comment(enumerator, _transition_unit_ctx, sm);
-      newEnumerator.name = enumerator->getQualifiedNameAsString();
-      newEnumerator.attrs = help::parse_attr(enumerator);
-      newEnumerator.value = enumerator->getInitVal().getRawData()[0];
-      newEnumerator.line = sm.getPresumedLineNumber(enumerator->getLocation());
-      newEnum.values.push_back(newEnumerator);
-    }
-    db.enums.push_back(std::move(newEnum));
-  } break;
-  case (clang::Decl::Function):
-  case (clang::Decl::CXXMethod): {
-    clang::FunctionDecl *functionDecl =
-        llvm::dyn_cast<clang::FunctionDecl>(decl);
-    if (!functionDecl)
-      return;
-    Function newFunction;
-    newFunction.access = help::get_access_string(functionDecl->getAccess());
-    newFunction.comment = comment;
-    newFunction.isStatic = functionDecl->isStatic();
-    auto proto = functionDecl->getType()->getAs<clang::FunctionProtoType>();
-    newFunction.isNothrow = proto ? proto->isNothrow() : false;
-    newFunction.name = functionDecl->getQualifiedNameAsString();
-    if (!location.isInvalid()) {
-      newFunction.fileName = absPath;
-      newFunction.line = location.getLine();
-    }
-    newFunction.attrs = attr;
-    if (auto methodDecl = llvm::dyn_cast<clang::CXXMethodDecl>(decl)) {
-      newFunction.isConst = methodDecl->isConst();
+    // parse array data
+    if (param->getType()->isConstantArrayType()) {
+      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
+      param_data.arraySize = ftype->getSize().getZExtValue();
+      param_data.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
+      param_data.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
     } else {
-      newFunction.isConst = false;
+      param_data.arraySize = 0;
+      param_data.type = help::get_type_name(param->getType(), _transition_unit_ctx);
+      param_data.rawType = help::get_raw_type_name(param->getType(), _transition_unit_ctx);
     }
-    if (!functionDecl->isNoReturn()) {
-      newFunction.retType =
-          help::get_type_name(functionDecl->getReturnType(), _transition_unit_ctx);
-      newFunction.rawRetType =
-          help::get_raw_type_name(functionDecl->getReturnType(), _transition_unit_ctx);
-    }
-    std::vector<std::string> newStack;
-    for (auto param : functionDecl->parameters()) {
-      Field newField;
-      newField.comment = help::get_comment(param, _transition_unit_ctx, sm);
-      newField.attrs = help::parse_attr(param);
-      newField.access = help::get_access_string(clang::AS_none);
-      if (param->hasDefaultArg()) {
-        llvm::raw_string_ostream s(newField.defaultValue);
-        if (param->hasUninstantiatedDefaultArg()) {
-          auto defArg = param->getUninstantiatedDefaultArg();
-          defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
-        } else {
-          auto defArg = param->getDefaultArg();
-          defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
-        }
-      }
-      newField.name = param->getNameAsString();
-      if (newField.name.empty()) {
-        newField.name =
-            "unnamed" + std::to_string(newFunction.parameters.size());
-        newField.isAnonymous = true;
-      }
-      if (param->getType()->isConstantArrayType()) {
-        auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
-        newField.arraySize = ftype->getSize().getZExtValue();
-        newField.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
-        newField.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+
+    // parse default value
+    if (param->hasDefaultArg()) {
+      llvm::raw_string_ostream s(param_data.defaultValue);
+      if (param->hasUninstantiatedDefaultArg()) {
+        auto defArg = param->getUninstantiatedDefaultArg();
+        defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
       } else {
-        newField.arraySize = 0;
-        newField.type = help::get_type_name(param->getType(), _transition_unit_ctx);
-        newField.rawType = help::get_raw_type_name(param->getType(), _transition_unit_ctx);
+        auto defArg = param->getDefaultArg();
+        defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
       }
-      newField.line = location.getLine();
-      HandleFunctionPointer(param, newField);
-      newFunction.parameters.push_back(std::move(newField));
     }
-    if (record)
-      record->methods.push_back(std::move(newFunction));
-    else
-      db.functions.push_back(std::move(newFunction));
-  }
-  case (clang::Decl::Field): {
-    clang::FieldDecl *fieldDecl = llvm::dyn_cast<clang::FieldDecl>(decl);
-    if (!fieldDecl)
-      return;
-    Field newField;
-    newField.comment = comment;
-    newField.attrs = attr;
-    newField.access = help::get_access_string(fieldDecl->getAccess());
-    newField.isStatic = false;
-    newField.name = fieldDecl->getNameAsString();
-    newField.line = location.getLine();
-    if (fieldDecl->getType()->isConstantArrayType()) {
-      auto ftype =
-          llvm::dyn_cast<clang::ConstantArrayType>(fieldDecl->getType());
-      newField.arraySize = ftype->getSize().getZExtValue();
-      newField.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
-      newField.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
-    } else {
-      newField.arraySize = 0;
-      newField.type = help::get_type_name(fieldDecl->getType(), _transition_unit_ctx);
-      newField.rawType = help::get_raw_type_name(fieldDecl->getType(), _transition_unit_ctx);
-    }
-    if (fieldDecl->hasInClassInitializer()) {
-      llvm::raw_string_ostream s(newField.defaultValue);
-      auto defArg = fieldDecl->getInClassInitializer();
-      defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
-    }
-    HandleFunctionPointer(fieldDecl, newField);
-    if (record) {
-      record->fields.push_back(std::move(newField));
-    } else
-      LOG("field without record founded.");
-  } break;
-  case (clang::Decl::Var): {
-    clang::VarDecl *varDecl = llvm::dyn_cast<clang::VarDecl>(decl);
-    if (!varDecl || !varDecl->isStaticDataMember())
-      return;
-    Field newField;
-    newField.access = help::get_access_string(varDecl->getAccess());
-    newField.comment = comment;
-    newField.attrs = attr;
-    newField.isStatic = true;
-    newField.name = varDecl->getNameAsString();
-    newField.type = help::get_type_name(varDecl->getType(), _transition_unit_ctx);
-    newField.line = location.getLine();
-    HandleFunctionPointer(varDecl, newField);
-    if (record)
-      record->fields.push_back(std::move(newField));
-    else
-      LOG("field without record founded.");
-  } break;
-  case (clang::Decl::ClassTemplate): {
-    // TODO
-  } break;
-  default:
-    break;
+
+    // parameter unused data
+    param_data.access = help::get_access_string(clang::AS_none);
+
+    // handle if function pointer
+    _fill_function_pointer(param, param_data);
+
+    // push parameter
+    out_func_data.parameters.push_back(std::move(param_data));
   }
 }
+void ASTConsumer::_fill_function_pointer(clang::DeclaratorDecl *decl, Field &out_field) {
+  // init
+  clang::Decl *signature_decl = decl;
+  clang::QualType signature_type = decl->getType();
+
+  // decode typedef
+  {
+    auto typedef_type = signature_type->getAs<clang::TypedefType>();
+    if (typedef_type) {
+      signature_decl = typedef_type->getDecl();
+      signature_type = typedef_type->getDecl()->getUnderlyingType();
+    }
+  }
+
+  // decode std::function
+  // TODO. remove it
+  bool is_functor = false;
+  {
+    auto template_specialization_type = signature_type->getAs<clang::TemplateSpecializationType>();
+    if (template_specialization_type) {
+      auto arguments = template_specialization_type->template_arguments();
+      if (arguments.size() == 0) {
+        return;
+      }
+      if (arguments[0].getKind() != clang::TemplateArgument::Type) {
+        return;
+      }
+
+      // update signature
+      signature_type = arguments[0].getAsType();
+      is_functor = true;
+    }
+  }
+
+  // decode typedef again for functor
+  {
+    auto typedef_type = signature_type->getAs<clang::TypedefType>();
+    if (typedef_type) {
+      signature_decl = typedef_type->getDecl();
+      signature_type = typedef_type->getDecl()->getUnderlyingType();
+    }
+  }
+
+  // decay signature
+  if (signature_type->isFunctionPointerType()) {
+    signature_type = signature_type->castAs<clang::PointerType>()->getPointeeType();
+  } else if (signature_type->isFunctionReferenceType()) {
+    signature_type = signature_type->castAs<clang::ReferenceType>()->getPointeeType();
+  } else if (signature_type->isConstantArrayType()) {
+    signature_type = signature_type->getAsArrayTypeUnsafe()->getElementType();
+  }
+
+  // final type
+  auto final_func_type = signature_type->getAs<clang::FunctionType>();
+  if (!final_func_type) {
+    return;
+  }
+
+  // visit parameters
+  ParmVisitor param_visitor;
+  param_visitor.consumer = this;
+  param_visitor.root_decl = signature_decl;
+  param_visitor.TraverseDecl(signature_decl);
+
+  // fill field function info
+  out_field.isFunctor = is_functor;
+  out_field.isCallback = true;
+
+  // signature comment & location
+  out_field.signature.comment = help::get_comment(signature_decl, transition_unit_ctx(), transition_unit_ctx()->getSourceManager());
+  out_field.signature.fileName = help::get_decl_file_name(signature_decl, transition_unit_ctx()->getSourceManager().getPresumedLoc(signature_decl->getLocation()));
+  out_field.signature.line = transition_unit_ctx()->getSourceManager().getPresumedLineNumber(signature_decl->getLocation());
+
+  // fill signature data
+  out_field.signature.name = out_field.name;
+  out_field.signature.attrs = out_field.attrs;
+  auto func_proto_type = final_func_type->getAs<clang::FunctionProtoType>();
+  out_field.signature.isNothrow = func_proto_type ? func_proto_type->isNothrow() : false;
+  out_field.signature.retType = help::get_type_name(final_func_type->getReturnType(), transition_unit_ctx());
+  out_field.signature.rawRetType = help::get_raw_type_name(final_func_type->getReturnType(), transition_unit_ctx());
+
+  // signature unused data
+  out_field.signature.access = help::get_access_string(clang::AS_none);
+  out_field.signature.isStatic = true;
+  out_field.signature.isConst = false;
+}
+} // namespace meta
