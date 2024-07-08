@@ -7,8 +7,6 @@
 #include <unordered_set>
 
 #define LOG(...)
-#define LOG_PUSH_IDENT
-#define LOG_POP_IDENT
 
 namespace meta {
 using namespace clang;
@@ -17,17 +15,26 @@ class ASTConsumer : public clang::ASTConsumer {
 public:
   ASTConsumer(FileDataMap &datamap, std::string root)
       : datamap(datamap), root(root) {}
-  void HandleTranslationUnit(ASTContext &ctx) override;
-  ASTContext *GetContext() { return _ASTContext; }
 
-  // helper functions
+  // override
+  void HandleTranslationUnit(ASTContext &ctx) override;
+
+  // getter
+  ASTContext *transition_unit_ctx() { return _transition_unit_ctx; }
+
+  // parse functions
   void HandleFunctionPointer(clang::DeclaratorDecl *decl, meta::Field &field);
-  void HandleDecl(clang::NamedDecl *decl, std::vector<std::string> &attrStack, Record *record, const clang::ASTRecordLayout *layout);
+  void HandleDecl(clang::NamedDecl *decl, Record *record, const clang::ASTRecordLayout *layout);
 
 protected:
+  // config
   FileDataMap &datamap;
   std::string root;
+
+  // 跳过前置声明的重复解析
   std::unordered_set<meta::Identity, meta::IdentityHash> parsed;
-  ASTContext *_ASTContext;
+
+  // 编译单元的节点
+  ASTContext *_transition_unit_ctx;
 };
 } // namespace meta

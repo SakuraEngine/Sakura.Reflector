@@ -15,7 +15,6 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Path.h"
-#include <iostream>
 #include <vector>
 
 namespace help {
@@ -73,36 +72,25 @@ std::string get_comment(clang::Decl *decl, clang::ASTContext *ctx,
   }
   return comment;
 }
-static llvm::SmallString<64> relative_path(const llvm::StringRef &root, const llvm::StringRef &path) {
+llvm::SmallString<64> relative_path(const llvm::StringRef &root, const llvm::StringRef &path) {
   if (!path.startswith(root))
     return {};
   return path.substr(root.size());
 }
-}; // namespace help
-
-std::string ParseLeafAttribute(clang::NamedDecl *decl,
-                               std::vector<std::string> &attrStack) {
+std::string parse_attr(clang::NamedDecl *decl) {
   std::string attr;
   for (auto annotate : decl->specific_attrs<clang::AnnotateAttr>()) {
     auto text = annotate->getAnnotation();
-    if (text.startswith("__push__")) {
-      auto pushText = text.substr(sizeof("__push__"));
-      attrStack.push_back(pushText.str());
-    } else if (text.equals("__pop__"))
-      attrStack.pop_back();
-    else
-      help::str_join(attr, text.str());
-  }
-  for (auto &pattr : attrStack) {
-    if (!attr.empty())
-      attr += ", ";
-    attr += pattr;
+    if (text.equals("__reflect__"))
+      continue;
+    help::str_join(attr, text.str());
   }
   return attr;
-}
+};
+}; // namespace help
 
 void meta::ASTConsumer::HandleTranslationUnit(ASTContext &ctx) {
-  _ASTContext = &ctx;
+  _transition_unit_ctx = &ctx;
   auto tuDecl = ctx.getTranslationUnitDecl();
   for (clang::DeclContext::decl_iterator i = tuDecl->decls_begin();
        i != tuDecl->decls_end(); ++i) {
@@ -112,14 +100,13 @@ void meta::ASTConsumer::HandleTranslationUnit(ASTContext &ctx) {
 
     // Filter out unsupported decls at the global namespace level
     clang::Decl::Kind kind = named_decl->getKind();
-    std::vector<std::string> newStack;
     switch (kind) {
     case (clang::Decl::Namespace):
     case (clang::Decl::CXXRecord):
     case (clang::Decl::Function):
     case (clang::Decl::Enum):
     case (clang::Decl::ClassTemplate):
-      HandleDecl(named_decl, newStack, nullptr, nullptr);
+      HandleDecl(named_decl, nullptr, nullptr);
       break;
     default:
       break;
@@ -139,12 +126,12 @@ public:
     if (param->getFunctionScopeDepth() != depth)
       return true;
     meta::Field newField;
-    auto &sm = consumer->GetContext()->getSourceManager();
+    auto &sm = consumer->transition_unit_ctx()->getSourceManager();
     auto location = sm.getPresumedLoc(param->getLocation());
     newField.access = help::get_access_string(clang::AS_none);
     newField.arraySize = 0;
-    newField.comment = help::get_comment(param, consumer->GetContext(), sm);
-    newField.attrs = ParseLeafAttribute(param, newStack);
+    newField.comment = help::get_comment(param, consumer->transition_unit_ctx(), sm);
+    newField.attrs = help::parse_attr(param);
     newField.name = param->getNameAsString();
     // no default value for function pointer
     newField.defaultValue = "";
@@ -156,12 +143,12 @@ public:
     if (param->getType()->isConstantArrayType()) {
       auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
       newField.arraySize = ftype->getSize().getZExtValue();
-      newField.type = help::get_type_name(ftype->getElementType(), consumer->GetContext());
-      newField.rawType = help::get_raw_type_name(ftype->getElementType(), consumer->GetContext());
+      newField.type = help::get_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
+      newField.rawType = help::get_raw_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
     } else {
       newField.arraySize = 0;
-      newField.type = help::get_type_name(param->getType(), consumer->GetContext());
-      newField.rawType = help::get_raw_type_name(param->getType(), consumer->GetContext());
+      newField.type = help::get_type_name(param->getType(), consumer->transition_unit_ctx());
+      newField.rawType = help::get_raw_type_name(param->getType(), consumer->transition_unit_ctx());
     }
     newField.line = location.getLine();
     consumer->HandleFunctionPointer(param, newField);
@@ -171,7 +158,6 @@ public:
 
   int depth;
   meta::Function function;
-  std::vector<std::string> newStack;
   meta::ASTConsumer *consumer;
   clang::Decl *decl;
 };
@@ -217,7 +203,7 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl *decl,
   pv.decl = trueDecl;
   pv.TraverseDecl(trueDecl);
 
-  auto &sm = GetContext()->getSourceManager();
+  auto &sm = transition_unit_ctx()->getSourceManager();
   auto location = sm.getPresumedLoc(trueDecl->getLocation());
   pv.function.attrs = field.attrs;
   pv.function.name = field.name;
@@ -230,14 +216,14 @@ void meta::ASTConsumer::HandleFunctionPointer(clang::DeclaratorDecl *decl,
   pv.function.isNothrow = proto ? proto->isNothrow() : false;
   pv.function.isConst = false;
   pv.function.line = location.getLine();
-  pv.function.comment = help::get_comment(trueDecl, GetContext(), sm);
-  pv.function.retType = help::get_type_name(type->getReturnType(), GetContext());
-  pv.function.rawRetType = help::get_raw_type_name(type->getReturnType(), GetContext());
+  pv.function.comment = help::get_comment(trueDecl, transition_unit_ctx(), sm);
+  pv.function.retType = help::get_type_name(type->getReturnType(), transition_unit_ctx());
+  pv.function.rawRetType = help::get_raw_type_name(type->getReturnType(), transition_unit_ctx());
   field.isFunctor = isFunctor;
   field.isCallback = true;
   field.signature = std::move(pv.function);
 }
-void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::string> &attrStack, Record *record, const clang::ASTRecordLayout *layout) {
+void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, Record *record, const clang::ASTRecordLayout *layout) {
   if (decl->isInvalidDecl())
     return;
   clang::Decl::Kind kind = decl->getKind();
@@ -247,7 +233,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
   std::string absPath;
   {
     Identity ident;
-    auto location = _ASTContext->getSourceManager().getPresumedLoc(decl->getLocation());
+    auto location = _transition_unit_ctx->getSourceManager().getPresumedLoc(decl->getLocation());
 
     if (!location.isInvalid()) {
       SmallString<1024> AbsolutePath(
@@ -282,19 +268,17 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
     if (auto inner = templateDecl->getTemplatedDecl())
       attrDecl = inner;
   }
+
+  // check reflect entry
   bool has_reflect_entry = false;
   for (auto annotate : attrDecl->specific_attrs<clang::AnnotateAttr>()) {
     auto text = annotate->getAnnotation();
     if (text.equals("__reflect__"))
       has_reflect_entry = true;
-    else if (text.startswith("__push__")) {
-      auto pushText = text.substr(sizeof("__push__") - 1);
-      attrStack.push_back(pushText.str());
-    } else if (text.equals("__pop__"))
-      attrStack.pop_back();
-    else
-      help::str_join(attr, text.str());
   }
+
+  // parse attr
+  attr = help::parse_attr(attrDecl);
 
   // filter reflect flag
   switch (kind) {
@@ -328,23 +312,17 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
   //   llvm::outs() << "\n";
   // }
 
-  for (auto &pattr : attrStack) {
-    if (!attr.empty())
-      attr += ", ";
-    attr += pattr;
-  }
-  auto &sm = _ASTContext->getSourceManager();
+  auto &sm = _transition_unit_ctx->getSourceManager();
   auto location = sm.getPresumedLoc(decl->getLocation());
-  auto comment = help::get_comment(decl, _ASTContext, sm);
+  auto comment = help::get_comment(decl, _transition_unit_ctx, sm);
   switch (kind) {
   case (clang::Decl::Namespace): {
     clang::DeclContext *declContext = decl->castToDeclContext(decl);
-    std::vector<std::string> newStack;
     for (clang::DeclContext::decl_iterator i = declContext->decls_begin();
          i != declContext->decls_end(); ++i) {
       clang::NamedDecl *named_decl = llvm::dyn_cast<clang::NamedDecl>(*i);
       if (named_decl) {
-        HandleDecl(named_decl, newStack, nullptr, nullptr);
+        HandleDecl(named_decl, nullptr, nullptr);
       }
     }
     return;
@@ -376,7 +354,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
       newRecord.line = location.getLine();
       newRecord.attrs = attr;
       for (auto base : recordDecl->bases()) {
-        newRecord.bases.push_back(help::get_type_name(base.getType(), _ASTContext));
+        newRecord.bases.push_back(help::get_type_name(base.getType(), _transition_unit_ctx));
         // TODO. base info
         base.isVirtual();
         base.getAccessSpecifier();
@@ -390,14 +368,12 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
     }
 
     clang::DeclContext *declContext = decl->castToDeclContext(decl);
-    std::vector<std::string> newStack;
     for (clang::DeclContext::decl_iterator i = declContext->decls_begin();
          i != declContext->decls_end(); ++i) {
       clang::NamedDecl *namedDecl = llvm::dyn_cast<clang::NamedDecl>(*i);
       if (!namedDecl)
         continue;
-      HandleDecl(namedDecl, newStack, &newRecord,
-                 &_ASTContext->getASTRecordLayout(recordDecl));
+      HandleDecl(namedDecl, &newRecord, &_transition_unit_ctx->getASTRecordLayout(recordDecl));
     }
 
     if (!recordDecl->isAnonymousStructOrUnion()) {
@@ -417,14 +393,14 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
     newEnum.attrs = attr;
     newEnum.underlying_type =
         enumDecl->isFixed()
-            ? enumDecl->getIntegerType().getAsString(_ASTContext->getLangOpts())
+            ? enumDecl->getIntegerType().getAsString(_transition_unit_ctx->getLangOpts())
             : "unfixed";
     std::vector<std::string> newStack;
     for (auto enumerator : enumDecl->enumerators()) {
       Enumerator newEnumerator;
-      newEnumerator.comment = help::get_comment(enumerator, _ASTContext, sm);
+      newEnumerator.comment = help::get_comment(enumerator, _transition_unit_ctx, sm);
       newEnumerator.name = enumerator->getQualifiedNameAsString();
-      newEnumerator.attrs = ParseLeafAttribute(enumerator, newStack);
+      newEnumerator.attrs = help::parse_attr(enumerator);
       newEnumerator.value = enumerator->getInitVal().getRawData()[0];
       newEnumerator.line = sm.getPresumedLineNumber(enumerator->getLocation());
       newEnum.values.push_back(newEnumerator);
@@ -456,24 +432,24 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
     }
     if (!functionDecl->isNoReturn()) {
       newFunction.retType =
-          help::get_type_name(functionDecl->getReturnType(), _ASTContext);
+          help::get_type_name(functionDecl->getReturnType(), _transition_unit_ctx);
       newFunction.rawRetType =
-          help::get_raw_type_name(functionDecl->getReturnType(), _ASTContext);
+          help::get_raw_type_name(functionDecl->getReturnType(), _transition_unit_ctx);
     }
     std::vector<std::string> newStack;
     for (auto param : functionDecl->parameters()) {
       Field newField;
-      newField.comment = help::get_comment(param, _ASTContext, sm);
-      newField.attrs = ParseLeafAttribute(param, newStack);
+      newField.comment = help::get_comment(param, _transition_unit_ctx, sm);
+      newField.attrs = help::parse_attr(param);
       newField.access = help::get_access_string(clang::AS_none);
       if (param->hasDefaultArg()) {
         llvm::raw_string_ostream s(newField.defaultValue);
         if (param->hasUninstantiatedDefaultArg()) {
           auto defArg = param->getUninstantiatedDefaultArg();
-          defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
+          defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
         } else {
           auto defArg = param->getDefaultArg();
-          defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
+          defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
         }
       }
       newField.name = param->getNameAsString();
@@ -485,12 +461,12 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
       if (param->getType()->isConstantArrayType()) {
         auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
         newField.arraySize = ftype->getSize().getZExtValue();
-        newField.type = help::get_type_name(ftype->getElementType(), _ASTContext);
-        newField.rawType = help::get_raw_type_name(ftype->getElementType(), _ASTContext);
+        newField.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
+        newField.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
       } else {
         newField.arraySize = 0;
-        newField.type = help::get_type_name(param->getType(), _ASTContext);
-        newField.rawType = help::get_raw_type_name(param->getType(), _ASTContext);
+        newField.type = help::get_type_name(param->getType(), _transition_unit_ctx);
+        newField.rawType = help::get_raw_type_name(param->getType(), _transition_unit_ctx);
       }
       newField.line = location.getLine();
       HandleFunctionPointer(param, newField);
@@ -516,17 +492,17 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
       auto ftype =
           llvm::dyn_cast<clang::ConstantArrayType>(fieldDecl->getType());
       newField.arraySize = ftype->getSize().getZExtValue();
-      newField.type = help::get_type_name(ftype->getElementType(), _ASTContext);
-      newField.rawType = help::get_raw_type_name(ftype->getElementType(), _ASTContext);
+      newField.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
+      newField.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
     } else {
       newField.arraySize = 0;
-      newField.type = help::get_type_name(fieldDecl->getType(), _ASTContext);
-      newField.rawType = help::get_raw_type_name(fieldDecl->getType(), _ASTContext);
+      newField.type = help::get_type_name(fieldDecl->getType(), _transition_unit_ctx);
+      newField.rawType = help::get_raw_type_name(fieldDecl->getType(), _transition_unit_ctx);
     }
     if (fieldDecl->hasInClassInitializer()) {
       llvm::raw_string_ostream s(newField.defaultValue);
       auto defArg = fieldDecl->getInClassInitializer();
-      defArg->printPretty(s, nullptr, _ASTContext->getPrintingPolicy());
+      defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
     }
     HandleFunctionPointer(fieldDecl, newField);
     if (record) {
@@ -544,7 +520,7 @@ void meta::ASTConsumer::HandleDecl(clang::NamedDecl *decl, std::vector<std::stri
     newField.attrs = attr;
     newField.isStatic = true;
     newField.name = varDecl->getNameAsString();
-    newField.type = help::get_type_name(varDecl->getType(), _ASTContext);
+    newField.type = help::get_type_name(varDecl->getType(), _transition_unit_ctx);
     newField.line = location.getLine();
     HandleFunctionPointer(varDecl, newField);
     if (record)
