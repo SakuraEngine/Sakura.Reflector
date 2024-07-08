@@ -855,6 +855,7 @@ void ASTConsumer::_fill_function_pointer(clang::DeclaratorDecl *decl, Field &out
   }
 
   // decode typedef again for functor
+  // TODO. remove it
   {
     auto typedef_type = signature_type->getAs<clang::TypedefType>();
     if (typedef_type) {
@@ -900,6 +901,9 @@ void ASTConsumer::_fill_function_pointer(clang::DeclaratorDecl *decl, Field &out
   out_field.signature.isNothrow = func_proto_type ? func_proto_type->isNothrow() : false;
   out_field.signature.retType = help::get_type_name(final_func_type->getReturnType(), transition_unit_ctx());
   out_field.signature.rawRetType = help::get_raw_type_name(final_func_type->getReturnType(), transition_unit_ctx());
+
+  // fill parameters
+  out_field.signature.parameters = std::move(param_visitor.parameters);
 
   // signature unused data
   out_field.signature.access = help::get_access_string(clang::AS_none);
