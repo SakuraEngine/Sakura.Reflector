@@ -33,6 +33,16 @@ static llvm::cl::opt<std::string>
          llvm::cl::desc("Specify parse root directory"), ToolCategory,
          llvm::cl::value_desc("directory"));
 
+// new command args
+// static llvm::cl::opt<std::string> Config(
+//     "config", llvm::cl::Required,
+//     llvm::cl::desc("Specify config file"),
+//     ToolCategory, llvm::cl::value_desc("file path"));
+// static llvm::cl::opt<std::string> Outdir(
+//     "outdir", llvm::cl::Required,
+//     llvm::cl::desc("Specify database output directory, depending on extension"),
+//     ToolCategory, llvm::cl::value_desc("directory"));
+
 // custom action
 static meta::FileDataMap data_map;
 class ReflectFrontendAction : public clang::ASTFrontendAction {
