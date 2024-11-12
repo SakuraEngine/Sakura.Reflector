@@ -76,6 +76,7 @@ int main(int argc, const char **argv) {
   argc = args.size();
 
   // parse args
+  llvm::outs() << "===========start parse arg===========\n";
   auto ExpectedParser = meta::OptionsParser::create(
       argc,
       args.data(),
@@ -87,6 +88,7 @@ int main(int argc, const char **argv) {
     return 1;
   }
   meta::OptionsParser &OptionsParser = ExpectedParser.get();
+  llvm::outs() << "===========end parse arg===========\n";
 
   // init time trace
   timeTraceProfilerInitialize(32, llvm::StringRef{args[0]});
@@ -94,7 +96,9 @@ int main(int argc, const char **argv) {
   // run tool
   // auto start = std::chrono::high_resolution_clock::now();
   tooling::ClangTool Tool(OptionsParser.getCompilations(), OptionsParser.getSourcePathList());
+  llvm::outs() << "===========start compile===========\n";
   int result = Tool.run(tooling::newFrontendActionFactory<ReflectFrontendAction>().get());
+  llvm::outs() << "===========end compile===========\n";
   // auto end = std::chrono::high_resolution_clock::now();
   // std::cout << "[" << Root << "]\n"
   //           << "Elapsed time: "
@@ -104,34 +108,60 @@ int main(int argc, const char **argv) {
   // serialize
   std::string OutPath;
   OutPath = Output;
+  llvm::outs() << "===========start write===========\n";
   for (auto &pair : data_map) {
-    using namespace llvm;
     if (pair.second.is_empty())
       continue;
 
     // replace extension to .h.meta
-    SmallString<1024> MetaPath(OutPath + pair.first);
-    sys::path::replace_extension(MetaPath, ".h.meta");
+    llvm::SmallString<1024> MetaPath(OutPath + pair.first);
+    llvm::sys::path::replace_extension(MetaPath, ".h.meta");
 
     // create meta dir
-    SmallString<1024> MetaDir = MetaPath;
-    sys::path::remove_filename(MetaDir);
-    llvm::sys::fs::create_directories(MetaDir);
+    llvm::SmallString<1024> MetaDir = MetaPath;
+    llvm::sys::path::remove_filename(MetaDir);
+    auto error_code = llvm::sys::fs::create_directories(MetaDir);
+    if (error_code) {
+      llvm::errs() << "failed to create directory: " << MetaDir << "\n";
+      llvm::errs() << "error: " << error_code.message() << "\n";
+      return 1;
+    }
 
     // write meta file
     std::ofstream of(MetaPath.str().str());
     of << meta::serialize(pair.second);
   }
+  llvm::outs() << "===========end write===========\n";
 
   // output time trace
+  llvm::outs() << "===========start dump trace===========\n";
   {
+    // get trace path
     llvm::SmallString<1024> time_trace_path(OutPath);
     llvm::sys::path::append(time_trace_path, "meta_time.json");
+
+    // remove old file and create dir
+    llvm::SmallString<1024> time_trace_dir = time_trace_path;
+    llvm::sys::path::remove_filename(time_trace_dir);
+    auto error_code = llvm::sys::fs::create_directories(time_trace_dir);
+    if (error_code) {
+      llvm::errs() << "failed to create directory: " << time_trace_dir << "\n";
+      llvm::errs() << "error: " << error_code.message() << "\n";
+      return 1;
+    }
+
+    // output time trace
     std::error_code ec;
     llvm::raw_fd_stream fs(time_trace_path, ec);
+    if (ec) {
+      llvm::errs() << "failed to write time trace: " << time_trace_path << "\n";
+      llvm::errs() << "error: " << ec.message() << "\n";
+      return 1;
+    }
     llvm::timeTraceProfilerWrite(fs);
     fs.close();
   }
+  llvm::outs() << "===========end dump trace===========\n";
 
   return result;
 }
