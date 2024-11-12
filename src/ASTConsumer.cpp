@@ -741,7 +741,8 @@ bool ASTConsumer::_filter_reflect_flag(clang::NamedDecl *decl) {
   bool has_reflect_entry = help::has_reflect_flag(decl);
   switch (decl->getKind()) {
   case (clang::Decl::CXXRecord):
-  case (clang::Decl::Enum): // need reflect flag
+  case (clang::Decl::Enum):
+  case (clang::Decl::Function): // need reflect flag
     if (!has_reflect_entry) {
       return false;
     }
