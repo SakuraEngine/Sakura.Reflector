@@ -164,7 +164,7 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
         SourcePathList.begin(), SourcePathList.end(), [&](std::string &path) {
           replaceAll(path, "\\", "/");
           for (auto &filter : filters)
-            if (llvm::StringRef(path).startswith(filter))
+            if (llvm::StringRef(path).starts_with(filter))
               return false;
           return true;
         });

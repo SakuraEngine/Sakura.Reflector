@@ -72,7 +72,7 @@ std::string get_comment(clang::Decl *decl, clang::ASTContext *ctx, clang::Source
   return comment;
 }
 std::string relative_path(const llvm::StringRef &root, const llvm::StringRef &path) {
-  if (!path.startswith(root))
+  if (!path.starts_with(root))
     return {};
   return path.substr(root.size()).str();
 }

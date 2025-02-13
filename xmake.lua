@@ -12,7 +12,7 @@ target("meta")
     add_cxflags("-Wno-c++11-narrowing", "-fno-rtti", {force = true, tools={"gcc", "clang"}})
     add_cxflags("/GR-", {force=true, tools={"clang_cl", "cl"}})
     add_links("lib/**")
-    add_links("Version", "advapi32", "Shcore", "user32", "shell32", "Ole32", {public = true})
+    add_syslinks("Version", "Ws2_32", "advapi32", "Shcore", "user32", "shell32", "Ole32", {public = true})
     add_includedirs("include")
 
 else
