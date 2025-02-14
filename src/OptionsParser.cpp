@@ -75,25 +75,25 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
 
   static cl::opt<std::string> BuildPath("p", cl::desc("Build path"),
                                         cl::Optional, cl::cat(Category),
-                                        cl::sub(*cl::AllSubCommands));
+                                        cl::sub(cl::SubCommand::getAll()));
 
   static cl::list<std::string> Filter(
       "folder", cl::desc("scan files in folders only"), cl::cat(Category),
-      cl::sub(*cl::AllSubCommands), cl::ZeroOrMore);
+      cl::sub(cl::SubCommand::getAll()), cl::ZeroOrMore);
 
   static cl::list<std::string> SourcePaths(
       cl::Positional, cl::desc("<source0> [... <sourceN>]"), OccurrencesFlag,
-      cl::cat(Category), cl::sub(*cl::AllSubCommands));
+      cl::cat(Category), cl::sub(cl::SubCommand::getAll()));
 
   static cl::list<std::string> ArgsAfter(
       "extra-arg",
       cl::desc("Additional argument to append to the compiler command line"),
-      cl::cat(Category), cl::sub(*cl::AllSubCommands));
+      cl::cat(Category), cl::sub(cl::SubCommand::getAll()));
 
   static cl::list<std::string> ArgsBefore(
       "extra-arg-before",
       cl::desc("Additional argument to prepend to the compiler command line"),
-      cl::cat(Category), cl::sub(*cl::AllSubCommands));
+      cl::cat(Category), cl::sub(cl::SubCommand::getAll()));
 
   cl::ResetAllOptionOccurrences();
 
