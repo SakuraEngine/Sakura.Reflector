@@ -1,5 +1,5 @@
 add_rules("mode.debug", "mode.release")
-
+add_defines("CLANG_BUILD_STATIC")
 set_languages("c11", "cxx17")
 set_policy("build.ccache", false)
 
