@@ -22,7 +22,7 @@ jobs:
         xmake f -m release --cc=clang-cl --cxx=clang-cl -c -y -v --policies=build.ccache:n
         xmake -y -v
     - name: UploadShipping
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts
         path: build
