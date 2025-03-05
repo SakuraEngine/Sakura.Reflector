@@ -12,66 +12,82 @@
 namespace meta {
 
 struct Function {
-  bool isStatic;
-  bool isConst;
-  bool isNothrow;
   std::string name;
-  std::string attrs;
-  std::vector<struct Field> parameters;
-  std::string retType;
-  std::string rawRetType;
   std::string access = "none";
+  
+  bool is_static;
+  bool is_const;
+  bool is_nothrow;
+  
+  std::string ret_type;
+  std::string raw_ret_type;
+  std::vector<struct Field> parameters;
+  
   std::string comment;
-  std::string fileName;
+  std::string file_name;
   int line;
+
+  std::string attrs;
 };
 
 struct Field {
   std::string name;
-  std::string type;
-  std::string rawType;
-  std::string attrs;
-  std::string comment;
-  std::string defaultValue;
-  size_t arraySize = 0;
-  bool isFunctor = false;
-  bool isCallback = false;
-  bool isAnonymous = false;
-  bool isStatic = false;
-  Function signature;
-  int line;
   std::string access = "none";
+  std::string type;
+  std::string raw_type;
+  
+  size_t array_size = 0;
+  std::string default_value;
+  bool is_functor = false;
+  bool is_callback = false;
+  bool is_anonymous = false;
+  bool is_static = false;
+  Function signature;
+  
+  std::string comment;
+  int line;
+  
+  std::string attrs;
 };
 
 struct Record {
-  std::vector<std::string> bases;
   std::string name;
-  std::string attrs;
-  std::string comment;
+
+  bool is_nested;
+  std::vector<std::string> bases;
   std::vector<Field> fields;
   std::vector<Function> methods;
-  std::string fileName;
+  
+  std::string file_name;
+  std::string comment;
   int line;
-  bool isNested;
+  
+  std::string attrs;
 };
 
 struct Enumerator {
   std::string name;
-  std::string attrs;
+
   uint64_t value;
+  
   std::string comment;
   int line;
+  
+  std::string attrs;
 };
 
 struct Enum {
   std::string name;
-  bool isScoped;
+  
   std::string underlying_type;
-  std::string attrs;
+  bool is_scoped;
   std::vector<Enumerator> values;
-  std::string fileName;
+  
+  std::string file_name;
   std::string comment;
   int line;
+  
+  std::string attrs;
 };
 
 struct Identity {

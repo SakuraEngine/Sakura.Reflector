@@ -130,20 +130,20 @@ public:
     param_data.name = param_decl->getNameAsString();
     if (param_data.name.empty()) {
       param_data.name = "unnamed" + std::to_string(param_decl->getFunctionScopeIndex());
-      param_data.isAnonymous = true;
+      param_data.is_anonymous = true;
     }
     param_data.attrs = help::parse_attr(param_decl);
 
     // parse array data
     if (param_decl->getType()->isConstantArrayType()) {
       auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param_decl->getType());
-      param_data.arraySize = ftype->getSize().getZExtValue();
+      param_data.array_size = ftype->getSize().getZExtValue();
       param_data.type = help::get_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
-      param_data.rawType = help::get_raw_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
+      param_data.raw_type = help::get_raw_type_name(ftype->getElementType(), consumer->transition_unit_ctx());
     } else {
-      param_data.arraySize = 0;
+      param_data.array_size = 0;
       param_data.type = help::get_type_name(param_decl->getType(), consumer->transition_unit_ctx());
-      param_data.rawType = help::get_raw_type_name(param_decl->getType(), consumer->transition_unit_ctx());
+      param_data.raw_type = help::get_raw_type_name(param_decl->getType(), consumer->transition_unit_ctx());
     }
 
     // recursive handle function pointer
@@ -151,8 +151,8 @@ public:
 
     // parameter unused data
     param_data.access = help::get_access_string(clang::AS_none);
-    param_data.arraySize = 0;
-    param_data.defaultValue = "";
+    param_data.array_size = 0;
+    param_data.default_value = "";
 
     // add parameter
     parameters.emplace_back(std::move(param_data));
@@ -312,7 +312,7 @@ void ASTConsumer::handle_record(clang::NamedDecl *decl) {
 
   // parse comment & location
   record_data.comment = help::get_comment(record_decl, _transition_unit_ctx, source_manager);
-  record_data.fileName = abs_file_name;
+  record_data.file_name = abs_file_name;
   record_data.line = line;
 
   // parse record data
@@ -394,12 +394,12 @@ void ASTConsumer::handle_enum(clang::NamedDecl *decl) {
 
   // parse comment & location
   enum_data.comment = help::get_comment(enum_decl, _transition_unit_ctx, source_manager);
-  enum_data.fileName = abs_file_name;
+  enum_data.file_name = abs_file_name;
   enum_data.line = line;
 
   // parse enum data
   enum_data.name = enum_decl->getQualifiedNameAsString();
-  enum_data.isScoped = enum_decl->isScoped();
+  enum_data.is_scoped = enum_decl->isScoped();
   enum_data.underlying_type = enum_decl->isFixed()
                                   ? enum_decl->getIntegerType().getAsString(_transition_unit_ctx->getLangOpts())
                                   : "unfixed";
@@ -464,7 +464,7 @@ void ASTConsumer::handle_function(clang::NamedDecl *decl) {
 
   // comment & location
   func_data.comment = help::get_comment(func_decl, _transition_unit_ctx, source_manager);
-  func_data.fileName = abs_file_name;
+  func_data.file_name = abs_file_name;
   func_data.line = line;
 
   // parse function data
@@ -472,7 +472,7 @@ void ASTConsumer::handle_function(clang::NamedDecl *decl) {
 
   // unused function data
   func_data.access = help::get_access_string(func_decl->getAccess());
-  func_data.isConst = false;
+  func_data.is_const = false;
 
   // push function
   _get_file_db(rel_file_name).functions.push_back(std::move(func_data));
@@ -523,7 +523,7 @@ void ASTConsumer::handle_method(clang::NamedDecl *decl, Function &out_method) {
 
   // comment & location
   out_method.comment = help::get_comment(method_decl, _transition_unit_ctx, source_manager);
-  out_method.fileName = abs_file_name;
+  out_method.file_name = abs_file_name;
   out_method.line = line;
 
   // parse method data
@@ -531,7 +531,7 @@ void ASTConsumer::handle_method(clang::NamedDecl *decl, Function &out_method) {
 
   // access & const
   out_method.access = help::get_access_string(method_decl->getAccess());
-  out_method.isConst = method_decl->isConst();
+  out_method.is_const = method_decl->isConst();
 }
 void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_method) {
   // filter invalid decl
@@ -566,7 +566,7 @@ void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_met
 
   // comment & location
   out_method.comment = help::get_comment(func_decl, _transition_unit_ctx, source_manager);
-  out_method.fileName = abs_file_name;
+  out_method.file_name = abs_file_name;
   out_method.line = line;
 
   // parse function data
@@ -574,7 +574,7 @@ void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_met
 
   // access & const
   out_method.access = help::get_access_string(func_decl->getAccess());
-  out_method.isConst = false;
+  out_method.is_const = false;
 }
 void ASTConsumer::handle_field(clang::NamedDecl *decl, Field &out_field) {
   // filter invalid decl
@@ -615,24 +615,24 @@ void ASTConsumer::handle_field(clang::NamedDecl *decl, Field &out_field) {
   out_field.name = field_decl->getNameAsString();
   out_field.attrs = help::parse_attr(field_decl);
   out_field.access = help::get_access_string(field_decl->getAccess());
-  out_field.isStatic = false;
+  out_field.is_static = false;
 
   // parse array data
   if (field_decl->getType()->isConstantArrayType()) {
     auto ftype =
         llvm::dyn_cast<clang::ConstantArrayType>(field_decl->getType());
-    out_field.arraySize = ftype->getSize().getZExtValue();
+    out_field.array_size = ftype->getSize().getZExtValue();
     out_field.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
-    out_field.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+    out_field.raw_type = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
   } else {
-    out_field.arraySize = 0;
+    out_field.array_size = 0;
     out_field.type = help::get_type_name(field_decl->getType(), _transition_unit_ctx);
-    out_field.rawType = help::get_raw_type_name(field_decl->getType(), _transition_unit_ctx);
+    out_field.raw_type = help::get_raw_type_name(field_decl->getType(), _transition_unit_ctx);
   }
 
   // default value
   if (field_decl->hasInClassInitializer()) {
-    llvm::raw_string_ostream s(out_field.defaultValue);
+    llvm::raw_string_ostream s(out_field.default_value);
     auto defArg = field_decl->getInClassInitializer();
     defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
   }
@@ -679,19 +679,19 @@ void ASTConsumer::handle_static_field(clang::NamedDecl *decl, Field &out_field) 
   out_field.name = var_decl->getNameAsString();
   out_field.attrs = help::parse_attr(var_decl);
   out_field.access = help::get_access_string(var_decl->getAccess());
-  out_field.isStatic = true;
+  out_field.is_static = true;
 
   // parse array data
   if (var_decl->getType()->isConstantArrayType()) {
     auto ftype =
         llvm::dyn_cast<clang::ConstantArrayType>(var_decl->getType());
-    out_field.arraySize = ftype->getSize().getZExtValue();
+    out_field.array_size = ftype->getSize().getZExtValue();
     out_field.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
-    out_field.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+    out_field.raw_type = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
   } else {
-    out_field.arraySize = 0;
+    out_field.array_size = 0;
     out_field.type = help::get_type_name(var_decl->getType(), _transition_unit_ctx);
-    out_field.rawType = help::get_raw_type_name(var_decl->getType(), _transition_unit_ctx);
+    out_field.raw_type = help::get_raw_type_name(var_decl->getType(), _transition_unit_ctx);
   }
 
   // handle if field is function pointer
@@ -762,13 +762,13 @@ Database &ASTConsumer::_get_file_db(const std::string &rel_file_name) {
 void ASTConsumer::_fill_function_data(clang::FunctionDecl *func_decl, Function &out_func_data) {
   // parse function data
   out_func_data.name = func_decl->getQualifiedNameAsString();
-  out_func_data.isStatic = func_decl->isStatic();
+  out_func_data.is_static = func_decl->isStatic();
   auto func_proto_type = func_decl->getType()->getAs<clang::FunctionProtoType>();
-  out_func_data.isNothrow = func_proto_type ? func_proto_type->isNothrow() : false;
+  out_func_data.is_nothrow = func_proto_type ? func_proto_type->isNothrow() : false;
   out_func_data.attrs = help::parse_attr(func_decl);
   if (!func_decl->isNoReturn()) {
-    out_func_data.retType = help::get_type_name(func_decl->getReturnType(), _transition_unit_ctx);
-    out_func_data.rawRetType = help::get_raw_type_name(func_decl->getReturnType(), _transition_unit_ctx);
+    out_func_data.ret_type = help::get_type_name(func_decl->getReturnType(), _transition_unit_ctx);
+    out_func_data.raw_ret_type = help::get_raw_type_name(func_decl->getReturnType(), _transition_unit_ctx);
   }
 
   // parse parameters
@@ -783,25 +783,25 @@ void ASTConsumer::_fill_function_data(clang::FunctionDecl *func_decl, Function &
     param_data.name = param->getNameAsString();
     if (param_data.name.empty()) {
       param_data.name = "unnamed" + std::to_string(out_func_data.parameters.size());
-      param_data.isAnonymous = true;
+      param_data.is_anonymous = true;
     }
     param_data.attrs = help::parse_attr(param);
 
     // parse array data
     if (param->getType()->isConstantArrayType()) {
       auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
-      param_data.arraySize = ftype->getSize().getZExtValue();
+      param_data.array_size = ftype->getSize().getZExtValue();
       param_data.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
-      param_data.rawType = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+      param_data.raw_type = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
     } else {
-      param_data.arraySize = 0;
+      param_data.array_size = 0;
       param_data.type = help::get_type_name(param->getType(), _transition_unit_ctx);
-      param_data.rawType = help::get_raw_type_name(param->getType(), _transition_unit_ctx);
+      param_data.raw_type = help::get_raw_type_name(param->getType(), _transition_unit_ctx);
     }
 
     // parse default value
     if (param->hasDefaultArg()) {
-      llvm::raw_string_ostream s(param_data.defaultValue);
+      llvm::raw_string_ostream s(param_data.default_value);
       if (param->hasUninstantiatedDefaultArg()) {
         auto defArg = param->getUninstantiatedDefaultArg();
         defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
@@ -887,28 +887,28 @@ void ASTConsumer::_fill_function_pointer(clang::DeclaratorDecl *decl, Field &out
   param_visitor.TraverseDecl(signature_decl);
 
   // fill field function info
-  out_field.isFunctor = is_functor;
-  out_field.isCallback = true;
+  out_field.is_functor = is_functor;
+  out_field.is_callback = true;
 
   // signature comment & location
   out_field.signature.comment = help::get_comment(signature_decl, transition_unit_ctx(), transition_unit_ctx()->getSourceManager());
-  out_field.signature.fileName = help::get_decl_file_name(signature_decl, transition_unit_ctx()->getSourceManager().getPresumedLoc(signature_decl->getLocation()));
+  out_field.signature.file_name = help::get_decl_file_name(signature_decl, transition_unit_ctx()->getSourceManager().getPresumedLoc(signature_decl->getLocation()));
   out_field.signature.line = transition_unit_ctx()->getSourceManager().getPresumedLineNumber(signature_decl->getLocation());
 
   // fill signature data
   out_field.signature.name = out_field.name;
   out_field.signature.attrs = out_field.attrs;
   auto func_proto_type = final_func_type->getAs<clang::FunctionProtoType>();
-  out_field.signature.isNothrow = func_proto_type ? func_proto_type->isNothrow() : false;
-  out_field.signature.retType = help::get_type_name(final_func_type->getReturnType(), transition_unit_ctx());
-  out_field.signature.rawRetType = help::get_raw_type_name(final_func_type->getReturnType(), transition_unit_ctx());
+  out_field.signature.is_nothrow = func_proto_type ? func_proto_type->isNothrow() : false;
+  out_field.signature.ret_type = help::get_type_name(final_func_type->getReturnType(), transition_unit_ctx());
+  out_field.signature.raw_ret_type = help::get_raw_type_name(final_func_type->getReturnType(), transition_unit_ctx());
 
   // fill parameters
   out_field.signature.parameters = std::move(param_visitor.parameters);
 
   // signature unused data
   out_field.signature.access = help::get_access_string(clang::AS_none);
-  out_field.signature.isStatic = true;
-  out_field.signature.isConst = false;
+  out_field.signature.is_static = true;
+  out_field.signature.is_const = false;
 }
 } // namespace meta

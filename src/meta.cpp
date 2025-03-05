@@ -1,18 +1,6 @@
 #include "meta.h"
 #include "llvm/Support/JSON.h"
 
-///   json::OStream J(OS);
-//    J.arrayBegin();
-///   for (const Event &E : Events) {
-///     J.objectBegin();
-///     J.attribute("timestamp", int64_t(E.Time));
-///     J.attributeBegin("participants");
-///     for (const Participant &P : E.Participants)
-///       J.value(P.toString());
-///     J.attributeEnd();
-///     J.objectEnd();
-///   }
-///   J.arrayEnd();
 namespace meta {
 void serializeAttr(llvm::json::OStream &J, const std::string &attr) {
   J.attributeBegin("attrs");
@@ -25,20 +13,20 @@ void serialize(llvm::json::OStream &J, const Function &P, bool method);
 void serialize(llvm::json::OStream &J, const Field &P) {
   J.attributeObject(P.name, [&] {
     J.attribute("type", P.type);
-    J.attribute("arraySize", P.arraySize);
-    J.attribute("rawType", P.rawType);
+    J.attribute("arraySize", P.array_size);
+    J.attribute("rawType", P.raw_type);
     J.attribute("access", P.access);
     serializeAttr(J, P.attrs);
-    J.attribute("isFunctor", P.isFunctor);
-    J.attribute("isCallback", P.isCallback);
-    J.attribute("isAnonymous", P.isAnonymous);
-    J.attribute("isStatic", P.isStatic);
-    if (P.isCallback) {
+    J.attribute("isFunctor", P.is_functor);
+    J.attribute("isCallback", P.is_callback);
+    J.attribute("isAnonymous", P.is_anonymous);
+    J.attribute("isStatic", P.is_static);
+    if (P.is_callback) {
       J.attributeBegin("functor");
       serialize(J, P.signature, false);
       J.attributeEnd();
     }
-    J.attribute("defaultValue", P.defaultValue);
+    J.attribute("defaultValue", P.default_value);
     J.attribute("comment", P.comment);
     J.attribute("line", P.line);
   });
@@ -48,9 +36,9 @@ void serialize(llvm::json::OStream &J, const Function &P, bool method) {
 
   J.object([&] {
     J.attribute("name", P.name);
-    J.attribute("isStatic", P.isStatic);
-    J.attribute("isConst", P.isConst);
-    J.attribute("isNothrow", P.isNothrow);
+    J.attribute("isStatic", P.is_static);
+    J.attribute("isConst", P.is_const);
+    J.attribute("isNothrow", P.is_nothrow);
     J.attribute("access", P.access);
     serializeAttr(J, P.attrs);
     J.attribute("comment", P.comment);
@@ -58,10 +46,10 @@ void serialize(llvm::json::OStream &J, const Function &P, bool method) {
       for (auto param : P.parameters)
         serialize(J, param);
     });
-    J.attribute("retType", P.retType);
-    J.attribute("rawRetType", P.rawRetType);
+    J.attribute("retType", P.ret_type);
+    J.attribute("rawRetType", P.raw_ret_type);
     if (!method)
-      J.attribute("fileName", P.fileName);
+      J.attribute("fileName", P.file_name);
     J.attribute("line", P.line);
   });
 }
@@ -89,9 +77,9 @@ std::string meta::serialize(const Database &P) {
           for (auto f : record.methods)
             serialize(J, f, true);
         });
-        J.attribute("isNested", record.isNested);
+        J.attribute("isNested", record.is_nested);
         J.attribute("comment", record.comment);
-        J.attribute("fileName", record.fileName);
+        J.attribute("fileName", record.file_name);
         J.attribute("line", record.line);
       });
     }
@@ -116,10 +104,10 @@ std::string meta::serialize(const Database &P) {
             });
           }
         });
-        J.attribute("isScoped", e.isScoped);
+        J.attribute("isScoped", e.is_scoped);
         J.attribute("underlying_type", e.underlying_type);
         J.attribute("comment", e.comment);
-        J.attribute("fileName", e.fileName);
+        J.attribute("fileName", e.file_name);
         J.attribute("line", e.line);
       });
     }
