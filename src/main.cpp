@@ -129,7 +129,7 @@ int main(int argc, const char **argv) {
 
     // write meta file
     std::ofstream of(MetaPath.str().str());
-    of << meta::serialize(pair.second);
+    of << pair.second.serialize();
   }
   llvm::outs() << "===========end write===========\n";
 

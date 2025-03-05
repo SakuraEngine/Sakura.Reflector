@@ -83,7 +83,7 @@ std::vector<std::string> parse_attr(clang::NamedDecl *decl) {
     if (text.equals("__reflect__")) {
       continue;
     }
-    attrs.push_back(text.str());
+    attrs.push_back("{" + text.str() + "}");
   }
   return attrs;
 };
@@ -408,7 +408,7 @@ void ASTConsumer::handle_enum(clang::NamedDecl *decl) {
 
   // parse enum item
   for (auto enumerator : enum_decl->enumerators()) {
-    Enumerator enumerator_data;
+    EnumValue enumerator_data;
     // parse comment & location
     enumerator_data.comment = help::get_comment(enumerator, _transition_unit_ctx, source_manager);
     enumerator_data.line = source_manager.getPresumedLineNumber(enumerator->getLocation());
