@@ -27,7 +27,7 @@ struct Function {
   std::string file_name;
   int line;
 
-  std::string attrs;
+  std::vector<std::string> attrs;
 };
 
 struct Field {
@@ -47,7 +47,7 @@ struct Field {
   std::string comment;
   int line;
   
-  std::string attrs;
+  std::vector<std::string> attrs;
 };
 
 struct Record {
@@ -62,7 +62,7 @@ struct Record {
   std::string comment;
   int line;
   
-  std::string attrs;
+  std::vector<std::string> attrs;
 };
 
 struct Enumerator {
@@ -73,7 +73,7 @@ struct Enumerator {
   std::string comment;
   int line;
   
-  std::string attrs;
+  std::vector<std::string> attrs;
 };
 
 struct Enum {
@@ -87,7 +87,7 @@ struct Enum {
   std::string comment;
   int line;
   
-  std::string attrs;
+  std::vector<std::string> attrs;
 };
 
 struct Identity {

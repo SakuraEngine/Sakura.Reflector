@@ -2,10 +2,12 @@
 #include "llvm/Support/JSON.h"
 
 namespace meta {
-void serializeAttr(llvm::json::OStream &J, const std::string &attr) {
-  J.attributeBegin("attrs");
-  J.rawValue("{ " + attr + " }");
-  J.attributeEnd();
+void serializeAttr(llvm::json::OStream &J, const std::vector<std::string> &attr) {
+  J.attributeArray("attrs", [&](){
+    for (auto& a : attr) {
+      J.value("{" + a + "}");
+    }
+  });
 }
 
 void serialize(llvm::json::OStream &J, const Function &P, bool method);

@@ -76,15 +76,16 @@ std::string relative_path(const llvm::StringRef &root, const llvm::StringRef &pa
     return {};
   return path.substr(root.size()).str();
 }
-std::string parse_attr(clang::NamedDecl *decl) {
-  std::string attr;
+std::vector<std::string> parse_attr(clang::NamedDecl *decl) {
+  std::vector<std::string> attrs;
   for (auto annotate : decl->specific_attrs<clang::AnnotateAttr>()) {
     auto text = annotate->getAnnotation();
-    if (text.equals("__reflect__"))
+    if (text.equals("__reflect__")) {
       continue;
-    help::str_join(attr, text.str());
+    }
+    attrs.push_back(text.str());
   }
-  return attr;
+  return attrs;
 };
 bool has_reflect_flag(clang::NamedDecl *decl) {
   for (auto annotate : decl->specific_attrs<clang::AnnotateAttr>()) {
