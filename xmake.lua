@@ -6,7 +6,7 @@ set_policy("build.ccache", false)
 if (is_os("windows")) then 
 
 target("meta")
-    set_runtimes("MT")  -- runtime depend on LLVM compiled version, official version is MT
+    set_runtimes("MD")  -- runtime depend on LLVM compiled version, official version is MT
     set_kind("binary")
     add_files("src/**.cpp")
     add_cxflags("-Wno-c++11-narrowing", "-fno-rtti", {force = true, tools={"gcc", "clang"}})
