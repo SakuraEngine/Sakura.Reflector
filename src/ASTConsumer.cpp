@@ -331,18 +331,34 @@ void ASTConsumer::handle_record(clang::NamedDecl *decl) {
     auto named_child_decl = llvm::dyn_cast<clang::NamedDecl>(child_decl);
     if (named_child_decl) {
       switch (named_child_decl->getKind()) {
-      case (clang::Decl::Field):
-        handle_field(named_child_decl, record_data.fields.emplace_back());
+      case (clang::Decl::Field): {
+        auto result = handle_field(named_child_decl);
+        if (result) {
+          record_data.fields.push_back(std::move(result.value()));
+        }
         break;
-      case (clang::Decl::Var):
-        handle_static_field(named_child_decl, record_data.fields.emplace_back());
+      }
+      case (clang::Decl::Var): {
+        auto result = handle_static_field(named_child_decl);
+        if (result) {
+          record_data.fields.push_back(std::move(result.value()));
+        }
         break;
-      case (clang::Decl::CXXMethod):
-        handle_method(named_child_decl, record_data.methods.emplace_back());
+      }
+      case (clang::Decl::CXXMethod): {
+        auto result = handle_method(named_child_decl);
+        if (result) {
+          record_data.methods.emplace_back(std::move(result.value()));
+        }
         break;
-      case (clang::Decl::Function):
-        handle_static_method(named_child_decl, record_data.methods.emplace_back());
+      }
+      case (clang::Decl::Function): {
+        auto result = handle_static_method(named_child_decl);
+        if (result) {
+          record_data.methods.emplace_back(std::move(result.value()));
+        }
         break;
+      }
       case (clang::Decl::Record):
         // nested record is not supported now
         break;
@@ -491,10 +507,10 @@ void ASTConsumer::handle_template(clang::NamedDecl *decl) {
 }
 
 // leaf level parse functions
-void ASTConsumer::handle_method(clang::NamedDecl *decl, Function &out_method) {
+std::optional<Function> ASTConsumer::handle_method(clang::NamedDecl *decl) {
   // filter invalid decl
   if (decl->isInvalidDecl())
-    return;
+    return {};
 
   // filter location
   clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
@@ -508,19 +524,21 @@ void ASTConsumer::handle_method(clang::NamedDecl *decl, Function &out_method) {
           abs_file_name,
           rel_file_name,
           line)) {
-    return;
+    return {};
   }
 
   // filter parsed identity
   if (!_filter_parsed_identity(decl, abs_file_name, line)) {
-    return;
+    return {};
   }
 
   // filter method
   clang::CXXMethodDecl *method_decl = llvm::dyn_cast<clang::CXXMethodDecl>(decl);
   if (!method_decl) {
-    return;
+    return {};
   }
+
+  Function out_method = {};
 
   // comment & location
   out_method.comment = help::get_comment(method_decl, _transition_unit_ctx, source_manager);
@@ -533,11 +551,13 @@ void ASTConsumer::handle_method(clang::NamedDecl *decl, Function &out_method) {
   // access & const
   out_method.access = help::get_access_string(method_decl->getAccess());
   out_method.is_const = method_decl->isConst();
+
+  return std::move(out_method);
 }
-void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_method) {
+std::optional<Function> ASTConsumer::handle_static_method(clang::NamedDecl *decl) {
   // filter invalid decl
   if (decl->isInvalidDecl())
-    return;
+    return {};
 
   // filter location
   clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
@@ -551,19 +571,21 @@ void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_met
           abs_file_name,
           rel_file_name,
           line)) {
-    return;
+    return {};
   }
 
   // filter parsed identity
   if (!_filter_parsed_identity(decl, abs_file_name, line)) {
-    return;
+    return {};
   }
 
   // filter static method
   clang::FunctionDecl *func_decl = llvm::dyn_cast<clang::FunctionDecl>(decl);
   if (!func_decl) {
-    return;
+    return {};
   }
+
+  Function out_method = {};
 
   // comment & location
   out_method.comment = help::get_comment(func_decl, _transition_unit_ctx, source_manager);
@@ -576,11 +598,13 @@ void ASTConsumer::handle_static_method(clang::NamedDecl *decl, Function &out_met
   // access & const
   out_method.access = help::get_access_string(func_decl->getAccess());
   out_method.is_const = false;
+
+  return std::move(out_method);
 }
-void ASTConsumer::handle_field(clang::NamedDecl *decl, Field &out_field) {
+std::optional<Field> ASTConsumer::handle_field(clang::NamedDecl *decl) {
   // filter invalid decl
   if (decl->isInvalidDecl())
-    return;
+    return {};
 
   // filter location
   clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
@@ -594,19 +618,21 @@ void ASTConsumer::handle_field(clang::NamedDecl *decl, Field &out_field) {
           abs_file_name,
           rel_file_name,
           line)) {
-    return;
+    return {};
   }
 
   // filter parsed identity
   if (!_filter_parsed_identity(decl, abs_file_name, line)) {
-    return;
+    return {};
   }
 
   // filter field
   clang::FieldDecl *field_decl = llvm::dyn_cast<clang::FieldDecl>(decl);
   if (!field_decl) {
-    return;
+    return {};
   }
+
+  Field out_field = {};
 
   // comment & location
   out_field.comment = help::get_comment(field_decl, _transition_unit_ctx, source_manager);
@@ -640,11 +666,13 @@ void ASTConsumer::handle_field(clang::NamedDecl *decl, Field &out_field) {
 
   // handle if field is function pointer
   _fill_function_pointer(field_decl, out_field);
+
+  return out_field;
 }
-void ASTConsumer::handle_static_field(clang::NamedDecl *decl, Field &out_field) {
+std::optional<Field> ASTConsumer::handle_static_field(clang::NamedDecl *decl) {
   // filter invalid decl
   if (decl->isInvalidDecl())
-    return;
+    return {};
 
   // filter location
   clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
@@ -658,19 +686,21 @@ void ASTConsumer::handle_static_field(clang::NamedDecl *decl, Field &out_field) 
           abs_file_name,
           rel_file_name,
           line)) {
-    return;
+    return {};
   }
 
   // filter parsed identity
   if (!_filter_parsed_identity(decl, abs_file_name, line)) {
-    return;
+    return {};
   }
 
   // filter static field
   clang::VarDecl *var_decl = llvm::dyn_cast<clang::VarDecl>(decl);
   if (!var_decl || !var_decl->isStaticDataMember()) {
-    return;
+    return {};
   }
+
+  Field out_field = {};
 
   // comment & location
   out_field.comment = help::get_comment(var_decl, _transition_unit_ctx, source_manager);
@@ -697,6 +727,8 @@ void ASTConsumer::handle_static_field(clang::NamedDecl *decl, Field &out_field) 
 
   // handle if field is function pointer
   _fill_function_pointer(var_decl, out_field);
+
+  return std::move(out_field);
 }
 
 // helper functions

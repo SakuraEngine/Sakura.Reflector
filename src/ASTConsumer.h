@@ -29,10 +29,10 @@ public:
   void handle_template(clang::NamedDecl *decl);
 
   // leaf level parse functions
-  void handle_method(clang::NamedDecl *decl, Function &out_method);
-  void handle_static_method(clang::NamedDecl *decl, Function &out_method);
-  void handle_field(clang::NamedDecl *decl, Field &out_field);
-  void handle_static_field(clang::NamedDecl *decl, Field &out_field);
+  std::optional<Function> handle_method(clang::NamedDecl *decl);
+  std::optional<Function> handle_static_method(clang::NamedDecl *decl);
+  std::optional<Field> handle_field(clang::NamedDecl *decl);
+  std::optional<Field> handle_static_field(clang::NamedDecl *decl);
 
 protected:
   friend class ::ParmVisitor;
