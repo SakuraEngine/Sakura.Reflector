@@ -2,7 +2,7 @@ import("utils.archive")
 import("download")
 
 if (os.host() =="windows") then 
-    local windows_llvm_version = "18.1.6"
+    local windows_llvm_version = "19.1.7"
     local release_url = "SakuraEngine/llvm-build/releases/download/llvm-windows-"..windows_llvm_version.."/llvm-windows-"..windows_llvm_version.."-msvc-x64-md-release.7z"
     local zipname = "llvm-windows-"..windows_llvm_version.."-msvc-x64-md-release.7z"
     download.file_from_github(release_url, zipname)
