@@ -80,7 +80,7 @@ std::vector<std::string> parse_attr(clang::NamedDecl *decl) {
   std::vector<std::string> attrs;
   for (auto annotate : decl->specific_attrs<clang::AnnotateAttr>()) {
     auto text = annotate->getAnnotation();
-    if (text.equals("__reflect__")) {
+    if (text == "__reflect__") {
       continue;
     }
     attrs.push_back("{" + text.str() + "}");
@@ -90,7 +90,7 @@ std::vector<std::string> parse_attr(clang::NamedDecl *decl) {
 bool has_reflect_flag(clang::NamedDecl *decl) {
   for (auto annotate : decl->specific_attrs<clang::AnnotateAttr>()) {
     auto text = annotate->getAnnotation();
-    if (text.equals("__reflect__"))
+    if (text == "__reflect__")
       return true;
   }
   return false;

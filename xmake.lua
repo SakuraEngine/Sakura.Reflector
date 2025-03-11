@@ -6,13 +6,13 @@ set_policy("build.ccache", false)
 if (is_os("windows")) then 
 
 target("meta")
-    set_runtimes("MD")
+    set_runtimes("MD")  -- runtime depend on LLVM compiled version, official version is MT
     set_kind("binary")
     add_files("src/**.cpp")
     add_cxflags("-Wno-c++11-narrowing", "-fno-rtti", {force = true, tools={"gcc", "clang"}})
     add_cxflags("/GR-", {force=true, tools={"clang_cl", "cl"}})
     add_links("lib/**")
-    add_syslinks("Version", "Ws2_32", "advapi32", "Shcore", "user32", "shell32", "Ole32", {public = true})
+    add_syslinks("Version", "ntdll", "Ws2_32", "advapi32", "Shcore", "user32", "shell32", "Ole32", {public = true})
     add_includedirs("include")
 
 else
