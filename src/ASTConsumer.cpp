@@ -83,7 +83,7 @@ std::vector<std::string> parse_attr(clang::NamedDecl *decl) {
     if (text == "__reflect__") {
       continue;
     }
-    attrs.push_back("{" + text.str() + "}");
+    attrs.push_back(text.str());
   }
   return attrs;
 };
