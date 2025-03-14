@@ -33,6 +33,7 @@ public:
   std::optional<Function> handle_static_method(clang::NamedDecl *decl);
   std::optional<Field> handle_field(clang::NamedDecl *decl);
   std::optional<Field> handle_static_field(clang::NamedDecl *decl);
+  std::optional<Constructor> handle_constructor(clang::NamedDecl *decl);
 
 protected:
   friend class ::ParmVisitor;
@@ -48,6 +49,7 @@ protected:
   Database &_get_file_db(const std::string &rel_file_name);
   void _fill_function_data(clang::FunctionDecl *func_decl, Function &out_func_data);
   void _fill_function_pointer(clang::DeclaratorDecl *decl, Field &out_field);
+  void _fill_ctor_data(clang::CXXConstructorDecl *ctor_decl, Constructor &out_ctor_data);
 
 protected:
   // config

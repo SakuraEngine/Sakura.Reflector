@@ -359,6 +359,13 @@ void ASTConsumer::handle_record(clang::NamedDecl *decl) {
         }
         break;
       }
+      case (clang::Decl::CXXConstructor): {
+        auto result = handle_constructor(named_child_decl);
+        if (result) {
+          record_data.ctors.emplace_back(std::move(result.value()));
+        }
+        break;
+      }
       case (clang::Decl::Record):
         // nested record is not supported now
         break;
@@ -730,6 +737,54 @@ std::optional<Field> ASTConsumer::handle_static_field(clang::NamedDecl *decl) {
 
   return std::move(out_field);
 }
+std::optional<Constructor> ASTConsumer::handle_constructor(clang::NamedDecl *decl) {
+  // filter invalid decl
+  if (decl->isInvalidDecl())
+    return {};
+
+  // filter location
+  clang::SourceManager &source_manager = _transition_unit_ctx->getSourceManager();
+  clang::PresumedLoc location = source_manager.getPresumedLoc(decl->getLocation());
+  std::string abs_file_name;
+  std::string rel_file_name;
+  unsigned line;
+  if (!_filter_decl_location(
+          decl,
+          location,
+          abs_file_name,
+          rel_file_name,
+          line)) {
+    return {};
+  }
+
+  // filter parsed identity
+  if (!_filter_parsed_identity(decl, abs_file_name, line)) {
+    return {};
+  }
+
+  // filter
+  clang::CXXConstructorDecl *ctor_decl = llvm::dyn_cast<clang::CXXConstructorDecl>(decl);
+  if (!ctor_decl) {
+    return {};
+  }
+
+  Constructor out_ctor = {};
+
+  // comment & location
+  out_ctor.comment = help::get_comment(ctor_decl, _transition_unit_ctx, source_manager);
+  out_ctor.file_name = abs_file_name;
+  out_ctor.line = line;
+
+  // llvm::outs() << "ctor: " << ctor_decl->getQualifiedNameAsString() << "\n";
+  // parse method data
+  _fill_ctor_data(ctor_decl, out_ctor);
+  // llvm::outs() << "end ctor: " << ctor_decl->getQualifiedNameAsString() << "\n";
+
+  // access & const
+  out_ctor.access = help::get_access_string(ctor_decl->getAccess());
+
+  return std::move(out_ctor);
+}
 
 // helper functions
 bool ASTConsumer::_filter_decl_location(clang::NamedDecl *decl,
@@ -943,5 +998,60 @@ void ASTConsumer::_fill_function_pointer(clang::DeclaratorDecl *decl, Field &out
   out_field.signature.access = help::get_access_string(clang::AS_none);
   out_field.signature.is_static = true;
   out_field.signature.is_const = false;
+}
+void ASTConsumer::_fill_ctor_data(clang::CXXConstructorDecl *ctor_decl, Constructor &out_ctor_data) {
+  // parse function data
+  out_ctor_data.name = ctor_decl->getQualifiedNameAsString();
+  auto func_proto_type = ctor_decl->getType()->getAs<clang::FunctionProtoType>();
+
+  // parse parameters
+  for (auto param : ctor_decl->parameters()) {
+    Field param_data;
+
+    // comment & location
+    param_data.comment = help::get_comment(param, _transition_unit_ctx, _transition_unit_ctx->getSourceManager());
+    param_data.line = _transition_unit_ctx->getSourceManager().getPresumedLineNumber(param->getLocation());
+
+    // parse parameter data
+    param_data.name = param->getNameAsString();
+    if (param_data.name.empty()) {
+      param_data.name = "unnamed" + std::to_string(out_ctor_data.parameters.size());
+      param_data.is_anonymous = true;
+    }
+    param_data.attrs = help::parse_attr(param);
+
+    // parse array data
+    if (param->getType()->isConstantArrayType()) {
+      auto ftype = llvm::dyn_cast<clang::ConstantArrayType>(param->getType());
+      param_data.array_size = ftype->getSize().getZExtValue();
+      param_data.type = help::get_type_name(ftype->getElementType(), _transition_unit_ctx);
+      param_data.raw_type = help::get_raw_type_name(ftype->getElementType(), _transition_unit_ctx);
+    } else {
+      param_data.array_size = 0;
+      param_data.type = help::get_type_name(param->getType(), _transition_unit_ctx);
+      param_data.raw_type = help::get_raw_type_name(param->getType(), _transition_unit_ctx);
+    }
+
+    // parse default value
+    if (param->hasDefaultArg()) {
+      llvm::raw_string_ostream s(param_data.default_value);
+      if (param->hasUninstantiatedDefaultArg()) {
+        auto defArg = param->getUninstantiatedDefaultArg();
+        defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
+      } else {
+        auto defArg = param->getDefaultArg();
+        defArg->printPretty(s, nullptr, _transition_unit_ctx->getPrintingPolicy());
+      }
+    }
+
+    // parameter unused data
+    param_data.access = help::get_access_string(clang::AS_none);
+
+    // handle if function pointer
+    _fill_function_pointer(param, param_data);
+
+    // push parameter
+    out_ctor_data.parameters.push_back(std::move(param_data));
+  }
 }
 } // namespace meta

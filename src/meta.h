@@ -28,6 +28,32 @@ META_SERDE_FWD(Database);
 } // namespace meta
 
 namespace meta {
+struct Constructor {
+  std::string name;
+  std::string access = "none";
+
+  std::vector<struct Field> parameters;
+
+  std::string comment;
+  std::string file_name;
+  int line;
+
+  std::vector<std::string> attrs;
+};
+META_SERDE_FUNCTION(Constructor) {
+  serde_obj(s, key, [&] {
+    META_SERDE(name)
+    META_SERDE(access)
+
+    META_SERDE(parameters)
+
+    META_SERDE(comment)
+    META_SERDE(file_name)
+    META_SERDE(line)
+
+    META_SERDE(attrs)
+  });
+}
 
 struct Function {
   std::string name;
@@ -55,15 +81,15 @@ META_SERDE_FUNCTION(Function) {
     META_SERDE(is_static)
     META_SERDE(is_const)
     META_SERDE(is_nothrow)
-    
+
     META_SERDE(ret_type)
     META_SERDE(raw_ret_type)
     META_SERDE(parameters)
-    
+
     META_SERDE(comment)
     META_SERDE(file_name)
     META_SERDE(line)
-    
+
     META_SERDE(attrs)
   });
 };
@@ -101,11 +127,11 @@ META_SERDE_FUNCTION(Field) {
     META_SERDE(is_callback)
     META_SERDE(is_anonymous)
     META_SERDE(is_static)
-    
+
     if (v.is_callback) {
       META_SERDE_N(signature, "functor")
     }
-    
+
     META_SERDE(comment)
     META_SERDE(line)
 
@@ -120,6 +146,7 @@ struct Record {
   std::vector<std::string> bases;
   std::vector<Field> fields;
   std::vector<Function> methods;
+  std::vector<Constructor> ctors;
 
   std::string file_name;
   std::string comment;
@@ -135,7 +162,8 @@ META_SERDE_FUNCTION(Record) {
     META_SERDE(bases)
     META_SERDE(fields)
     META_SERDE(methods)
-    
+    META_SERDE(ctors)
+
     META_SERDE(file_name)
     META_SERDE(comment)
     META_SERDE(line)
@@ -159,7 +187,7 @@ META_SERDE_FUNCTION(EnumValue) {
     META_SERDE(name)
 
     META_SERDE(value)
-    
+
     META_SERDE(comment)
     META_SERDE(line)
 
@@ -187,7 +215,7 @@ META_SERDE_FUNCTION(Enum) {
     META_SERDE(underlying_type)
     META_SERDE(is_scoped)
     META_SERDE(values)
-    
+
     META_SERDE(file_name)
     META_SERDE(comment)
     META_SERDE(line)
@@ -207,9 +235,9 @@ struct Database {
     std::string str;
     llvm::raw_string_ostream output(str);
     llvm::json::OStream stream(output);
-  
-    serde(stream, "", const_cast<Database&>(*this));
-  
+
+    serde(stream, "", const_cast<Database &>(*this));
+
     return str;
   }
 };
