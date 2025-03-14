@@ -1003,7 +1003,8 @@ void ASTConsumer::_fill_ctor_data(clang::CXXConstructorDecl *ctor_decl, Construc
   // parse function data
   out_ctor_data.name = ctor_decl->getQualifiedNameAsString();
   auto func_proto_type = ctor_decl->getType()->getAs<clang::FunctionProtoType>();
-
+  out_ctor_data.attrs = help::parse_attr(ctor_decl);
+  
   // parse parameters
   for (auto param : ctor_decl->parameters()) {
     Field param_data;
