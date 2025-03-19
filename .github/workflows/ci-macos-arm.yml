@@ -28,7 +28,7 @@ jobs:
         xmake f -m release -y --policies=build.ccache:n --arch=${{ matrix.arch }}
         xmake -y -v
     - name: UploadShipping
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: artifacts-${{ matrix.arch }}
         path: build

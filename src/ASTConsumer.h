@@ -6,29 +6,60 @@
 #include "clang/AST/RecordLayout.h"
 #include <unordered_set>
 
-#define LOG(...)
-#define LOG_PUSH_IDENT
-#define LOG_POP_IDENT
+class ParmVisitor;
 
 namespace meta {
 using namespace clang;
 
-enum ParseBehavior { PAR_Normal, PAR_Reflect, PAR_NoReflect };
 class ASTConsumer : public clang::ASTConsumer {
 public:
-  ASTConsumer(FileDataMap &datamap, std::string root)
-      : datamap(datamap), root(root) {}
-  void HandleTranslationUnit(ASTContext &ctx) override;
-  ASTContext* GetContext() { return _ASTContext; }
+  ASTConsumer(FileDataMap &datamap, std::string root);
 
-  void HandleFunctionPointer(clang::DeclaratorDecl* decl, meta::Field& field);
+  // getter
+  ASTContext *transition_unit_ctx() { return _transition_unit_ctx; }
+
+  // override
+  void HandleTranslationUnit(ASTContext &ctx) override;
+
+  // root level parse functions
+  void handle_namespace(clang::NamedDecl *decl);
+  void handle_record(clang::NamedDecl *decl);
+  void handle_enum(clang::NamedDecl *decl);
+  void handle_function(clang::NamedDecl *decl);
+  void handle_template(clang::NamedDecl *decl);
+
+  // leaf level parse functions
+  std::optional<Function> handle_method(clang::NamedDecl *decl);
+  std::optional<Function> handle_static_method(clang::NamedDecl *decl);
+  std::optional<Field> handle_field(clang::NamedDecl *decl);
+  std::optional<Field> handle_static_field(clang::NamedDecl *decl);
+  std::optional<Constructor> handle_constructor(clang::NamedDecl *decl);
+
 protected:
-  FileDataMap &datamap;
-  std::string root;
-  std::unordered_set<meta::Identity, meta::IdentityHash> parsed;
-  ASTContext *_ASTContext;
-  void HandleDecl(clang::NamedDecl *decl, std::vector<std::string> &attrStack,
-                  ParseBehavior behavior, Record *record,
-                  const clang::ASTRecordLayout *layout);
+  friend class ::ParmVisitor;
+
+  // helper functions
+  bool _filter_decl_location(clang::NamedDecl *decl,
+                             const clang::PresumedLoc &location,
+                             std::string &out_abs_file_name,
+                             std::string &out_rel_file_name,
+                             unsigned &out_line);
+  bool _filter_parsed_identity(clang::NamedDecl *decl, const std::string &file_name, unsigned line);
+  bool _filter_reflect_flag(clang::NamedDecl *decl);
+  Database &_get_file_db(const std::string &rel_file_name);
+  void _fill_function_data(clang::FunctionDecl *func_decl, Function &out_func_data);
+  void _fill_function_pointer(clang::DeclaratorDecl *decl, Field &out_field);
+  void _fill_ctor_data(clang::CXXConstructorDecl *ctor_decl, Constructor &out_ctor_data);
+
+protected:
+  // config
+  FileDataMap &_datamap;
+  std::string _root = {};
+
+  // 跳过前置声明的重复解析
+  std::unordered_set<meta::Identity, meta::IdentityHash> _parsed = {};
+
+  // 编译单元的节点
+  ASTContext *_transition_unit_ctx = nullptr;
 };
 } // namespace meta

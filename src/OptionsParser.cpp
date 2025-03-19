@@ -75,25 +75,25 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
 
   static cl::opt<std::string> BuildPath("p", cl::desc("Build path"),
                                         cl::Optional, cl::cat(Category),
-                                        cl::sub(*cl::AllSubCommands));
+                                        cl::sub(cl::SubCommand::getAll()));
 
   static cl::list<std::string> Filter(
       "folder", cl::desc("scan files in folders only"), cl::cat(Category),
-      cl::sub(*cl::AllSubCommands), cl::ZeroOrMore);
+      cl::sub(cl::SubCommand::getAll()), cl::ZeroOrMore);
 
   static cl::list<std::string> SourcePaths(
       cl::Positional, cl::desc("<source0> [... <sourceN>]"), OccurrencesFlag,
-      cl::cat(Category), cl::sub(*cl::AllSubCommands));
+      cl::cat(Category), cl::sub(cl::SubCommand::getAll()));
 
   static cl::list<std::string> ArgsAfter(
       "extra-arg",
       cl::desc("Additional argument to append to the compiler command line"),
-      cl::cat(Category), cl::sub(*cl::AllSubCommands));
+      cl::cat(Category), cl::sub(cl::SubCommand::getAll()));
 
   static cl::list<std::string> ArgsBefore(
       "extra-arg-before",
       cl::desc("Additional argument to prepend to the compiler command line"),
-      cl::cat(Category), cl::sub(*cl::AllSubCommands));
+      cl::cat(Category), cl::sub(cl::SubCommand::getAll()));
 
   cl::ResetAllOptionOccurrences();
 
@@ -101,23 +101,22 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
 
   std::string ErrorMessage;
   const char *const *DoubleDash = std::find(argv, argv + argc, StringRef("--"));
-  if (DoubleDash != argv + argc)
-  {
-    if(DoubleDash[1][0] == '@')
-    {
+  if (DoubleDash != argv + argc) {
+    if (DoubleDash[1][0] == '@') {
       llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> File =
-      llvm::MemoryBuffer::getFile(DoubleDash[1] + 1);
+          llvm::MemoryBuffer::getFile(DoubleDash[1] + 1);
       if (std::error_code Result = File.getError()) {
-        ErrorMessage = "Error while opening fixed database: " + Result.message();
-        return llvm::make_error<llvm::StringError>(ErrorMessage,
-                                                  llvm::inconvertibleErrorCode());
+        ErrorMessage =
+            "Error while opening fixed database: " + Result.message();
+        return llvm::make_error<llvm::StringError>(
+            ErrorMessage, llvm::inconvertibleErrorCode());
       }
-      Compilations = FixedCompilationDatabase::loadFromBuffer(".",(*File)->getBuffer(), ErrorMessage);
+      Compilations = FixedCompilationDatabase::loadFromBuffer(
+          ".", (*File)->getBuffer(), ErrorMessage);
       argc = DoubleDash - argv;
-    }
-    else
-    {
-      Compilations = FixedCompilationDatabase::loadFromCommandLine(argc, argv, ErrorMessage);
+    } else {
+      Compilations = FixedCompilationDatabase::loadFromCommandLine(
+          argc, argv, ErrorMessage);
     }
   }
   if (!ErrorMessage.empty())
@@ -165,7 +164,7 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
         SourcePathList.begin(), SourcePathList.end(), [&](std::string &path) {
           replaceAll(path, "\\", "/");
           for (auto &filter : filters)
-            if (llvm::StringRef(path).startswith(filter))
+            if (llvm::StringRef(path).starts_with(filter))
               return false;
           return true;
         });
