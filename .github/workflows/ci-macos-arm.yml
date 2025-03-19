@@ -10,7 +10,7 @@ jobs:
         arch: [ arm64 ]
 
     name: build-macos-${{ matrix.arch }}
-    runs-on: flyci-macos-large-latest-m1
+    runs-on: macos-15
     steps:
     - uses: actions/checkout@v2
       with:
