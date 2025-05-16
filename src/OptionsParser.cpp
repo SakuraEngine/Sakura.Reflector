@@ -31,7 +31,9 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/Path.h"
-
+#if _WIN32
+#include <Windows.h>
+#endif
 using namespace clang::tooling;
 using namespace llvm;
 using namespace meta;
@@ -72,7 +74,31 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
                                 llvm::cl::NumOccurrencesFlag OccurrencesFlag,
                                 cl::OptionCategory &Category,
                                 const char *Overview) {
-
+ struct ProcessMutex {
+#if _WIN32
+        HANDLE mtx = 0;
+#endif
+        ProcessMutex() {
+        }
+        void lock() {
+#if _WIN32
+            mtx = OpenMutex(MUTEX_ALL_ACCESS, false, TEXT("luisa_win_clang_mtx"));
+            if (mtx == NULL) {
+                mtx = CreateMutex(nullptr, true, TEXT("luisa_win_clang_mtx"));
+            } else {
+                WaitForSingleObject(mtx, 0xFFFFFFFF);
+            }
+#endif
+        }
+        void unlock() {
+#if _WIN32
+            if (mtx) {
+                ReleaseMutex(mtx);
+                mtx = nullptr;
+            }
+#endif
+        }
+  };
   static cl::opt<std::string> BuildPath("p", cl::desc("Build path"),
                                         cl::Optional, cl::cat(Category),
                                         cl::sub(cl::SubCommand::getAll()));
@@ -102,6 +128,8 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
   std::string ErrorMessage;
   const char *const *DoubleDash = std::find(argv, argv + argc, StringRef("--"));
   if (DoubleDash != argv + argc) {
+    ProcessMutex process_mtx;
+    process_mtx.lock();
     if (DoubleDash[1][0] == '@') {
       llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> File =
           llvm::MemoryBuffer::getFile(DoubleDash[1] + 1);
@@ -118,6 +146,7 @@ llvm::Error OptionsParser::init(int &argc, const char **argv,
       Compilations = FixedCompilationDatabase::loadFromCommandLine(
           argc, argv, ErrorMessage);
     }
+    process_mtx.unlock();
   }
   if (!ErrorMessage.empty())
     ErrorMessage.append("\n");
